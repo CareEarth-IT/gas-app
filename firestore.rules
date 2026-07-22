@@ -1,0 +1,191 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // 管理画面用: shared/adminEmails.ts（npm run sync:admin で同期）
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email.lower() in [
+          'yuta_masui@careearth.info',
+          'yuki_nishikawa@careearth.info'
+        ];
+    }
+
+    function isValidEmail(value) {
+      return value is string
+        && value.size() <= 254
+        && value.matches('^.+@.+\\..+$');
+    }
+
+    function authEmailMatches(dataEmail) {
+      return request.auth.token.email != null
+        && dataEmail == request.auth.token.email;
+    }
+
+    function isServerTimestamp(field) {
+      return field == request.time;
+    }
+
+    function areEtcPhotoUrlsValid(urls) {
+      return urls is list
+        && urls.size() >= 1
+        && urls.size() <= 3
+        && urls[0] is string
+        && urls[0].size() <= 400000
+        && (urls.size() < 2 || (urls[1] is string && urls[1].size() <= 400000))
+        && (urls.size() < 3 || (urls[2] is string && urls[2].size() <= 400000));
+    }
+
+    function isValidRefuelingRecord(data) {
+      return data.keys().hasAll(['timestamp', 'email', 'vehicleNumber', 'vehicleModel', 'meterImageUrl', 'receiptImageUrl'])
+        && data.keys().size() == 6
+        && isServerTimestamp(data.timestamp)
+        && authEmailMatches(data.email)
+        && data.vehicleNumber is string && data.vehicleNumber.size() <= 50
+        && data.vehicleModel is string && data.vehicleModel.size() <= 100
+        && data.meterImageUrl is string && data.meterImageUrl.size() <= 1000000
+        && data.receiptImageUrl is string && data.receiptImageUrl.size() <= 1000000;
+    }
+
+    function isValidEtcRecord(data) {
+      return data.keys().hasAll(['startTime', 'endTime', 'email', 'vehicleNumber', 'vehicleModel', 'category', 'destination', 'routeStart', 'routeEnd', 'photoUrls'])
+        && data.keys().size() == 10
+        && isServerTimestamp(data.endTime)
+        && data.startTime is timestamp
+        && authEmailMatches(data.email)
+        && data.vehicleNumber is string && data.vehicleNumber.size() <= 50
+        && data.vehicleModel is string && data.vehicleModel.size() <= 100
+        && data.category is string && data.category.size() <= 100
+        && data.destination is string && data.destination.size() <= 200
+        && data.routeStart is string && data.routeStart.size() <= 200
+        && data.routeEnd is string && data.routeEnd.size() <= 200
+        && areEtcPhotoUrlsValid(data.photoUrls);
+    }
+
+    match /drivingLogs/{recordId} {
+      allow create: if isSignedIn()
+        && request.resource.data.email == request.auth.token.email;
+      allow read, update: if isAdmin()
+        || (isSignedIn() && resource.data.email == request.auth.token.email);
+    }
+
+    match /reservations/{recordId} {
+      allow create: if isSignedIn()
+        && request.resource.data.email == request.auth.token.email;
+      // 空き車両の判定のため、ログインユーザーは全予約を参照可能
+      allow read: if isSignedIn();
+      allow update: if isAdmin()
+        || (isSignedIn()
+          && resource.data.email == request.auth.token.email
+          && resource.data.status == 'active'
+          && request.resource.data.status in ['completed', 'cancelled']);
+    }
+
+    match /gpsLogs/{recordId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+    }
+
+    match /refuelingRecords/{recordId} {
+      allow create: if isSignedIn() && isValidRefuelingRecord(request.resource.data);
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.email == request.auth.token.email);
+    }
+
+    match /etcRecords/{recordId} {
+      allow create: if isSignedIn() && isValidEtcRecord(request.resource.data);
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.email == request.auth.token.email);
+    }
+
+    function isValidVehicleFields(data) {
+      return data.keys().hasAll(['vehicleNumber', 'chassisNumber', 'vehicleName', 'modelType', 'fuelType', 'usageArea', 'isPersonal', 'personalOwnerEmail'])
+        && data.vehicleNumber is string && data.vehicleNumber.size() <= 50
+        && data.chassisNumber is string && data.chassisNumber.size() <= 50
+        && data.vehicleName is string && data.vehicleName.size() >= 1 && data.vehicleName.size() <= 100
+        && data.modelType is string && data.modelType.size() <= 50
+        && data.fuelType is string && data.fuelType.size() <= 20
+        && data.usageArea is string && data.usageArea.size() <= 50
+        && data.isPersonal is bool
+        && data.personalOwnerEmail is string && data.personalOwnerEmail.size() <= 254
+        && (!data.isPersonal || data.personalOwnerEmail.matches('^.+@.+\\..+$'));
+    }
+
+    function isValidVehicleCreate(data) {
+      return isValidVehicleFields(data)
+        && data.keys().hasOnly(['vehicleNumber', 'chassisNumber', 'vehicleName', 'modelType', 'fuelType', 'usageArea', 'isPersonal', 'personalOwnerEmail', 'createdAt', 'updatedAt'])
+        && isServerTimestamp(data.createdAt)
+        && isServerTimestamp(data.updatedAt);
+    }
+
+    function isValidVehicleUpdate(data) {
+      return isValidVehicleFields(data)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && isServerTimestamp(data.updatedAt);
+    }
+
+    function vehicleCoreFieldsUnchanged() {
+      return request.resource.data.vehicleNumber == resource.data.vehicleNumber
+        && request.resource.data.chassisNumber == resource.data.chassisNumber
+        && request.resource.data.vehicleName == resource.data.vehicleName
+        && request.resource.data.modelType == resource.data.modelType
+        && request.resource.data.fuelType == resource.data.fuelType
+        && request.resource.data.usageArea == resource.data.usageArea;
+    }
+
+    // ドライバーが予約画面から個人保有を申請（車両マスタの基本項目は変更不可）
+    function isPersonalVehicleClaimUpdate() {
+      return isSignedIn()
+        && request.resource.data.isPersonal == true
+        && request.resource.data.personalOwnerEmail == request.auth.token.email
+        && isValidEmail(request.resource.data.personalOwnerEmail)
+        && (!resource.data.isPersonal || resource.data.personalOwnerEmail == request.auth.token.email)
+        && vehicleCoreFieldsUnchanged()
+        && isServerTimestamp(request.resource.data.updatedAt);
+    }
+
+    match /vehicles/{vehicleId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidVehicleCreate(request.resource.data);
+      allow update: if (isAdmin() && isValidVehicleUpdate(request.resource.data))
+        || isPersonalVehicleClaimUpdate();
+      allow delete: if isAdmin();
+    }
+
+    match /vehicleMaintenance/{recordId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /userSessions/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.sessionId is string
+        && request.resource.data.sessionId.size() > 0
+        && request.resource.data.sessionId.size() <= 128;
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /departments/{deptId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /staffProfiles/{profileId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /reportAlertLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

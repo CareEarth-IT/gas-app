@@ -1,0 +1,11 @@
+.git
+.firebase
+node_modules
+function
+.env
+.env.*
+!.env.example
+agent-transcripts
+assets
+*.log
+dist/server.cjs.map

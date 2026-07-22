@@ -1,0 +1,6 @@
+{
+  "name": "社用車給油管理システム",
+  "description": "社用車の給油記録を手軽に行えるシステムです。カメラでメーターとレシートを撮影し、AIが金額を自動抽出します。",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

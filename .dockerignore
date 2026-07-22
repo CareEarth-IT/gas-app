@@ -1,0 +1,11 @@
+node_modules
+function/node_modules
+dist
+.git
+.firebase
+.env
+.env.*
+!.env.example
+*.log
+agent-transcripts
+assets

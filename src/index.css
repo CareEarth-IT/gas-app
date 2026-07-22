@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@300;400;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+
+  /* 青系＋グレー系の配色 */
+  --color-bg-app: #F1F5F9;
+  --color-card-app: #FFFFFF;
+  --color-accent-blue: #1E3A8A;
+  --color-accent-blue-light: #3B82F6;
+  --color-accent-blue-bg: #EFF6FF;
+  --color-border-muted: #E2E8F0;
+  --color-text-main: #0F172A;
+  --color-text-muted: #475569;
+  --color-text-light: #94A3B8;
+
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  --animate-spin-slow: spin-slow 8s linear infinite;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-app text-text-main antialiased;
+  }
+}
+
+.menu-button {
+  @apply w-full p-6 bg-white rounded-lg shadow-sm border border-slate-200
+         flex items-center gap-5 text-left
+         active:scale-[0.98] active:bg-slate-50 transition-transform;
+}
+.menu-button__icon {
+  @apply w-10 h-10 flex-shrink-0 bg-accent-blue-bg rounded-lg
+         flex items-center justify-center text-accent-blue;
+}
+.menu-button__text-primary {
+  @apply font-bold text-text-main;
+}
+.menu-button__text-secondary {
+  @apply text-xs text-text-muted mt-0.5;
+}
+
+.elegant-card {
+  @apply bg-card-app border border-border-muted rounded-xl shadow-sm;
+}
+
+.step-number {
+  @apply w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm bg-accent-blue text-white;
+}

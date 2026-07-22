@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "StaffProfile": {
+      "title": "Staff Profile",
+      "description": "Google Workspace staff profile linked to Firebase Auth user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "Google Workspace email" },
+        "staffId": { "type": "string", "description": "Employee / staff ID" },
+        "staffName": { "type": "string", "description": "Display name" },
+        "department": { "type": "string", "description": "Department name" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last profile update" }
+      },
+      "required": ["uid", "email", "staffId", "staffName", "department", "updatedAt"]
+    },
+    "RefuelingRecord": {
+      "title": "Refueling Record",
+      "description": "Record of a vehicle refueling event",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time", "description": "Time of submission" },
+        "staffId": { "type": "string", "description": "Google Workspace Staff ID" },
+        "staffName": { "type": "string", "description": "Staff Name" },
+        "department": { "type": "string", "description": "Department/Section Name" },
+        "meterImageUrl": { "type": "string", "description": "Base64 or Storage URL of meter and car number photo" },
+        "receiptImageUrl": { "type": "string", "description": "Base64 or Storage URL of receipt photo" },
+        "amount": { "type": "number", "description": "Refueling amount extracted from receipt" }
+      },
+      "required": ["timestamp", "staffId", "staffName", "department", "meterImageUrl", "receiptImageUrl", "amount"]
+    }
+  },
+  "firestore": {
+    "staffProfiles/{userId}": {
+      "schema": "StaffProfile",
+      "description": "Staff profiles synced from Google Workspace on sign-in"
+    },
+    "refuelingRecords/{recordId}": {
+      "schema": "RefuelingRecord",
+      "description": "Collection of refueling records"
+    }
+  }
+}
