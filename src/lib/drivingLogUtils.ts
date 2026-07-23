@@ -60,7 +60,7 @@ export function destinationFromReservation(
   return reservation?.purpose?.trim() || reservation?.routeEnd?.trim() || "";
 }
 
-/** 指定時点で有効な予約か（active かつ終了前） */
+/** 指定時点で有効な予約か（active かつ終了前。終了時刻ちょうどは空き） */
 export function isReservationEffective(
   reservation: ReservationLike,
   at: Date = new Date()
@@ -68,7 +68,7 @@ export function isReservationEffective(
   if (reservation.status === "completed") return false;
   if (reservation.status && reservation.status !== "active") return false;
   const end = toDate(reservation.endTime);
-  return !!end && end >= at;
+  return !!end && end > at;
 }
 
 /** 運転記録に対応する予約を検索（メール・車両・時間帯で照合） */

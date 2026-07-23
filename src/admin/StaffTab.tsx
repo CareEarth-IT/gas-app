@@ -18,6 +18,8 @@ import { clearStaffNameMapCache } from "../lib/staffNames";
 
 type StaffTabProps = {
   onError: (message: string | null) => void;
+  /** false のとき閲覧のみ（追加・編集・削除不可） */
+  canEdit?: boolean;
 };
 
 const EMPTY_OFFICER: DepartmentOfficer = { name: "", email: "" };
@@ -60,7 +62,7 @@ function formatDepartmentNames(
   return names.length > 0 ? names.join("、") : "—";
 }
 
-export default function StaffTab({ onError }: StaffTabProps) {
+export default function StaffTab({ onError, canEdit = true }: StaffTabProps) {
   const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
   const [staff, setStaff] = useState<StaffProfileRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,13 +275,15 @@ export default function StaffTab({ onError }: StaffTabProps) {
             <Users className="w-5 h-5" />
             部署・役員
           </h2>
-          <button
-            onClick={openNewDept}
-            className="flex items-center gap-1 px-3 py-2 bg-[#4a72b2] text-white text-sm font-bold rounded-lg"
-          >
-            <Plus className="w-4 h-4" />
-            部署を追加
-          </button>
+          {canEdit && (
+            <button
+              onClick={openNewDept}
+              className="flex items-center gap-1 px-3 py-2 bg-[#4a72b2] text-white text-sm font-bold rounded-lg"
+            >
+              <Plus className="w-4 h-4" />
+              部署を追加
+            </button>
+          )}
         </div>
 
         <p className="text-xs text-slate-500 mb-3">
@@ -354,22 +358,24 @@ export default function StaffTab({ onError }: StaffTabProps) {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            onClick={() => openEditDept(dept)}
-                            className="p-1.5 text-slate-600 hover:bg-slate-100 rounded"
-                            title="編集"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => dept.id && void removeDept(dept.id)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                            title="削除"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        {canEdit && (
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => openEditDept(dept)}
+                              className="p-1.5 text-slate-600 hover:bg-slate-100 rounded"
+                              title="編集"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => dept.id && void removeDept(dept.id)}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                              title="削除"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -383,13 +389,15 @@ export default function StaffTab({ onError }: StaffTabProps) {
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-slate-800">スタッフ区分</h2>
-          <button
-            onClick={openNewStaff}
-            className="flex items-center gap-1 px-3 py-2 bg-[#4a72b2] text-white text-sm font-bold rounded-lg"
-          >
-            <Plus className="w-4 h-4" />
-            スタッフを登録
-          </button>
+          {canEdit && (
+            <button
+              onClick={openNewStaff}
+              className="flex items-center gap-1 px-3 py-2 bg-[#4a72b2] text-white text-sm font-bold rounded-lg"
+            >
+              <Plus className="w-4 h-4" />
+              スタッフを登録
+            </button>
+          )}
         </div>
 
         <p className="text-xs text-slate-500 mb-3">
@@ -446,20 +454,22 @@ export default function StaffTab({ onError }: StaffTabProps) {
                         .join("・") || "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          onClick={() => openEditStaff(row)}
-                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => void removeStaff(row.email)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => openEditStaff(row)}
+                            className="p-1.5 text-slate-600 hover:bg-slate-100 rounded"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => void removeStaff(row.email)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))

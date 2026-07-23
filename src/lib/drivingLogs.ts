@@ -57,8 +57,10 @@ export async function updateAlcoholCheck(
 }
 
 export async function fetchAccessRole(): Promise<{
-  role: "admin" | "officer" | "none";
+  role: "admin" | "officer" | "viewer" | "none";
   canApproveDrivingLogs: boolean;
+  canViewAllTabs: boolean;
+  canEditMaster: boolean;
 }> {
   return apiGet("/auth/access-role");
 }

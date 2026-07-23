@@ -429,7 +429,7 @@ export default function AdminApp() {
   const [errorKind, setErrorKind] = useState<"load" | "action">("load");
   const [signingIn, setSigningIn] = useState(false);
   const [accessRole, setAccessRole] = useState<
-    "admin" | "officer" | "none" | null
+    "admin" | "officer" | "viewer" | "none" | null
   >(null);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(
     null
@@ -442,16 +442,17 @@ export default function AdminApp() {
 
   const isAdmin = accessRole === "admin";
   const isOfficer = accessRole === "officer";
-  const canAccessPanel = isAdmin || isOfficer;
-  const visibleTabs = isAdmin
-    ? TABS
-    : TABS.filter(
-        (tab) =>
-          tab.id === "drivingLogs" ||
-          tab.id === "alcoholChecks" ||
-          tab.id === "etcRecords" ||
-          tab.id === "reservations"
-      );
+  const isViewer = accessRole === "viewer";
+  const canAccessPanel = isAdmin || isOfficer || isViewer;
+  const canApprove = isAdmin || isOfficer;
+  const visibleTabs = canAccessPanel ? TABS : [];
+  const roleLabel = isAdmin
+    ? ""
+    : isOfficer
+      ? "（上長）"
+      : isViewer
+        ? "（閲覧）"
+        : "";
 
   useEffect(() => {
     const unsubPromise = initAuth(
@@ -479,7 +480,7 @@ export default function AdminApp() {
 
     const rejectUnauthorized = async (email: string | null | undefined) => {
       setAccessDeniedMessage(
-        `${email ?? "このアカウント"} には管理画面の権限がありません。管理者または部署の役員メールでログインしてください。`
+        `${email ?? "このアカウント"} には管理画面の権限がありません。管理者・部署の役員、または経理部／大阪管理部のスタッフでログインしてください。`
       );
       setAccessRole("none");
       await logout();
@@ -495,18 +496,20 @@ export default function AdminApp() {
     void fetchAccessRole()
       .then(async (result) => {
         if (cancelled) return;
-        if (result.role === "officer") {
-          setAccessDeniedMessage(null);
-          setAccessRole("officer");
+        const allowed =
+          result.role === "admin" ||
+          result.role === "officer" ||
+          result.role === "viewer" ||
+          result.canViewAllTabs === true;
+        if (!allowed) {
+          await rejectUnauthorized(user.email);
+          return;
+        }
+        setAccessDeniedMessage(null);
+        setAccessRole(result.role);
+        if (result.role === "officer" || result.role === "viewer") {
           setActiveTab("drivingLogs");
-          return;
         }
-        if (result.role === "admin") {
-          setAccessDeniedMessage(null);
-          setAccessRole("admin");
-          return;
-        }
-        await rejectUnauthorized(user.email);
       })
       .catch(async () => {
         if (cancelled) return;
@@ -678,33 +681,14 @@ export default function AdminApp() {
   useEffect(() => {
     if (!user || !canAccessPanel) return;
     if (
-      !isAdmin &&
-      activeTab !== "drivingLogs" &&
-      activeTab !== "alcoholChecks" &&
-      activeTab !== "etcRecords" &&
-      activeTab !== "reservations"
+      activeTab === "vehicles" ||
+      activeTab === "vehicleMileage" ||
+      activeTab === "staff"
     ) {
       return;
     }
-    if (
-      isAdmin &&
-      activeTab !== "vehicles" &&
-      activeTab !== "vehicleMileage" &&
-      activeTab !== "staff"
-    ) {
-      void loadTab(activeTab);
-      return;
-    }
-    if (
-      !isAdmin &&
-      (activeTab === "drivingLogs" ||
-        activeTab === "alcoholChecks" ||
-        activeTab === "etcRecords" ||
-        activeTab === "reservations")
-    ) {
-      void loadTab(activeTab);
-    }
-  }, [user, canAccessPanel, isAdmin, activeTab, loadTab]);
+    void loadTab(activeTab);
+  }, [user, canAccessPanel, activeTab, loadTab]);
 
   const handleSignIn = async () => {
     setSigningIn(true);
@@ -756,7 +740,7 @@ export default function AdminApp() {
             Google でログイン
           </button>
           <p className="text-xs text-slate-500 mt-4">
-            @careearth.info でも、部署の役員または管理者に登録されていないアカウントは利用できません。
+            管理者・部署の役員、または経理部／大阪管理部のスタッフのみ利用できます。
           </p>
         </div>
       </div>
@@ -796,7 +780,7 @@ export default function AdminApp() {
           <h1 className="text-lg font-bold">社用車管理 管理画面</h1>
           <p className="text-xs opacity-80">
             {user.email}
-            {isOfficer ? "（上長）" : ""}
+            {roleLabel}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -847,12 +831,12 @@ export default function AdminApp() {
             </div>
           )}
 
-          {isAdmin && activeTab === "vehicles" ? (
-            <VehiclesTab onError={setError} />
-          ) : isAdmin && activeTab === "vehicleMileage" ? (
-            <VehicleMileageTab onError={setError} />
-          ) : isAdmin && activeTab === "staff" ? (
-            <StaffTab onError={setError} />
+          {activeTab === "vehicles" ? (
+            <VehiclesTab onError={setError} canEdit={isAdmin} />
+          ) : activeTab === "vehicleMileage" ? (
+            <VehicleMileageTab onError={setError} canEdit={isAdmin} />
+          ) : activeTab === "staff" ? (
+            <StaffTab onError={setError} canEdit={isAdmin} />
           ) : (
             <>
           <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
@@ -945,7 +929,8 @@ export default function AdminApp() {
                 <tbody>
                   {displayRows.map((row) => {
                     const approval = getRowApproval(activeTab, row);
-                    const showApprove = canApproveRow(activeTab, row);
+                    const showApprove =
+                      canApprove && canApproveRow(activeTab, row);
                     const rowClass = APPROVAL_TABS.has(activeTab)
                       ? row.status === "driving"
                         ? "border-b border-slate-100 hover:bg-slate-50"

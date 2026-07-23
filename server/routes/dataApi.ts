@@ -11,6 +11,7 @@ import {
   requireAuth
 } from "../auth.ts";
 import { isAdminEmail } from "../adminConfig.ts";
+import { canViewAdminPanel, resolveAdminAccess } from "../adminAccess.ts";
 import {
   approvalFieldsForCreate,
   approvalFieldsForStatus,
@@ -45,9 +46,7 @@ import {
   syncStaffFromEmployeeSite
 } from "../staffSync.ts";
 import {
-  canApproveStaffRecord,
-  getOfficerContext,
-  isOfficerEmail
+  canApproveStaffRecord
 } from "../officerAuth.ts";
 import { requireJobSecret } from "../jobAuth.ts";
 import { runMissingReportReminderJob } from "../missingReportReminder.ts";
@@ -146,7 +145,7 @@ async function completeExpiredReservations(
   for (const docSnap of snap.docs) {
     const data = docSnap.data() as ReservationLike & { email?: string };
     const end = toDate(data.endTime);
-    if (!end || end >= now) continue;
+    if (!end || end > now) continue;
 
     if (
       options?.userEmail &&
@@ -248,13 +247,27 @@ function findActiveReservationForDriving(
   );
 }
 
+/** 分単位に切り捨て（秒未満の差で境界予約が誤検知されないようにする） */
+function floorToMinute(date: Date): Date {
+  const ms = date.getTime();
+  return new Date(ms - (ms % 60_000));
+}
+
+/**
+ * 時間帯の重複判定（半開区間 [start, end)）。
+ * 終了ちょうどからの次予約（例: 〜12:00 の次に 12:00〜）は重複しない。
+ */
 function rangesOverlap(
   aStart: Date,
   aEnd: Date,
   bStart: Date,
   bEnd: Date
 ): boolean {
-  return aStart < bEnd && aEnd > bStart;
+  const a0 = floorToMinute(aStart).getTime();
+  const a1 = floorToMinute(aEnd).getTime();
+  const b0 = floorToMinute(bStart).getTime();
+  const b1 = floorToMinute(bEnd).getTime();
+  return a0 < b1 && a1 > b0;
 }
 
 // --- Auth bootstrap ---
@@ -325,16 +338,8 @@ router.get("/auth/access-role", requireAuth, async (req, res) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const email = userEmail(authReq);
-    if (isAdminEmail(email)) {
-      res.json({ role: "admin", canApproveDrivingLogs: true });
-      return;
-    }
-    const officer = await isOfficerEmail(getAdminDb(), email);
-    if (officer) {
-      res.json({ role: "officer", canApproveDrivingLogs: true });
-      return;
-    }
-    res.json({ role: "none", canApproveDrivingLogs: false });
+    const access = await resolveAdminAccess(getAdminDb(), email);
+    res.json(access);
   } catch (error) {
     console.error("auth/access-role error:", error);
     res.status(500).json({ error: "権限の確認に失敗しました" });
@@ -727,15 +732,15 @@ router.post("/reservations", requireAuth, async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const email = userEmail(authReq);
     const body = req.body as Record<string, unknown>;
-    const startDate = new Date(String(body.startTime));
-    const endDate = new Date(String(body.endTime));
+    const startDate = floorToMinute(new Date(String(body.startTime)));
+    const endDate = floorToMinute(new Date(String(body.endTime)));
     const vehicleNumber = String(body.vehicleNumber ?? "").trim();
     const isSubstitute = body.usageStatus === "substitute";
     const shouldUpdateVehicleSubstitute =
       typeof body.isSubstituteVehicle === "boolean";
     const substituteUntil =
       isSubstitute && body.substituteUntil
-        ? new Date(String(body.substituteUntil))
+        ? floorToMinute(new Date(String(body.substituteUntil)))
         : null;
 
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
@@ -1337,27 +1342,16 @@ router.get(
       const authReq = req as AuthenticatedRequest;
       const email = userEmail(authReq);
       const name = req.params.name;
-      const isAdmin = isAdminEmail(email);
+      const access = await resolveAdminAccess(getAdminDb(), email);
 
       if (!ADMIN_COLLECTIONS.has(name)) {
         res.status(400).json({ error: "無効なコレクション名です" });
         return;
       }
 
-      if (!isAdmin) {
-        if (
-          name !== "drivingLogs" &&
-          name !== "etcRecords" &&
-          name !== "reservations"
-        ) {
-          res.status(403).json({ error: "管理者権限が必要です" });
-          return;
-        }
-        const officer = await isOfficerEmail(getAdminDb(), email);
-        if (!officer) {
-          res.status(403).json({ error: "管理者または上長権限が必要です" });
-          return;
-        }
+      if (!access.canViewAllTabs) {
+        res.status(403).json({ error: "管理者または閲覧権限が必要です" });
+        return;
       }
 
       const orderField =
@@ -1376,20 +1370,7 @@ router.get(
         .limit(limit)
         .get();
 
-      let docs = snap.docs;
-      if ((name === "drivingLogs" || name === "etcRecords") && !isAdmin) {
-        const ctx = await getOfficerContext(getAdminDb(), email);
-        const allowed = new Set(ctx.staffEmails);
-        docs = docs.filter((docSnap) =>
-          allowed.has(
-            String((docSnap.data() as { email?: string }).email ?? "")
-              .trim()
-              .toLowerCase()
-          )
-        );
-      }
-
-      res.json(serializeDocs(docs));
+      res.json(serializeDocs(snap.docs));
     } catch (error) {
       console.error("admin/collections error:", error);
       const { status, body } = firestoreErrorPayload(
@@ -1449,8 +1430,14 @@ router.delete(
 
 // --- Staff / departments (report alerts) ---
 
-router.get("/admin/departments", requireAuth, requireAdmin, async (_req, res) => {
+router.get("/admin/departments", requireAuth, async (req, res) => {
   try {
+    const authReq = req as AuthenticatedRequest;
+    const allowed = await canViewAdminPanel(getAdminDb(), userEmail(authReq));
+    if (!allowed) {
+      res.status(403).json({ error: "管理者または閲覧権限が必要です" });
+      return;
+    }
     const snap = await getAdminDb().collection("departments").orderBy("name").get();
     res.json(
       snap.docs.map((doc) => {
@@ -1460,7 +1447,9 @@ router.get("/admin/departments", requireAuth, requireAdmin, async (_req, res) =>
           id: doc.id,
           name: data.name,
           officers,
-          officerEmails: officerEmailsFromOfficers(officers)
+          officerEmails: officerEmailsFromOfficers(officers),
+          sealImageUrl:
+            typeof data.sealImageUrl === "string" ? data.sealImageUrl : ""
         };
       })
     );
@@ -1562,9 +1551,14 @@ router.delete(
 router.get(
   "/admin/staff-profiles",
   requireAuth,
-  requireAdmin,
-  async (_req, res) => {
+  async (req, res) => {
     try {
+      const authReq = req as AuthenticatedRequest;
+      const allowed = await canViewAdminPanel(getAdminDb(), userEmail(authReq));
+      if (!allowed) {
+        res.status(403).json({ error: "管理者または閲覧権限が必要です" });
+        return;
+      }
       const snap = await getAdminDb()
         .collection("staffProfiles")
         .orderBy("email")

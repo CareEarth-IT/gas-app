@@ -20,6 +20,13 @@ async function loadDepartments(db: Firestore): Promise<DepartmentRef[]> {
   }));
 }
 
+/** 部署マスタ（権限判定・名前照合用） */
+export async function loadDepartmentsForAccess(
+  db: Firestore
+): Promise<DepartmentRef[]> {
+  return loadDepartments(db);
+}
+
 export async function getOfficerSeedDepartmentIds(
   db: Firestore,
   officerEmail: string

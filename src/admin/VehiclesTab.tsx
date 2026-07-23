@@ -33,9 +33,10 @@ const EMPTY_FORM: VehicleFormData = {
 
 type Props = {
   onError: (msg: string | null) => void;
+  canEdit?: boolean;
 };
 
-export default function VehiclesTab({ onError }: Props) {
+export default function VehiclesTab({ onError, canEdit = true }: Props) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -177,13 +178,15 @@ export default function VehiclesTab({ onError }: Props) {
             />
             更新
           </button>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 px-4 py-2 bg-[#4a72b2] text-white rounded-lg text-sm font-bold hover:bg-[#3d6199]"
-          >
-            <Plus className="w-4 h-4" />
-            新規登録
-          </button>
+          {canEdit && (
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-4 py-2 bg-[#4a72b2] text-white rounded-lg text-sm font-bold hover:bg-[#3d6199]"
+            >
+              <Plus className="w-4 h-4" />
+              新規登録
+            </button>
+          )}
         </div>
       </div>
 
@@ -194,12 +197,14 @@ export default function VehiclesTab({ onError }: Props) {
       ) : vehicles.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
           <p>登録されている車両がありません</p>
-          <button
-            onClick={openCreate}
-            className="px-6 py-3 bg-[#4a72b2] text-white rounded-lg font-bold hover:bg-[#3d6199]"
-          >
-            新規登録
-          </button>
+          {canEdit && (
+            <button
+              onClick={openCreate}
+              className="px-6 py-3 bg-[#4a72b2] text-white rounded-lg font-bold hover:bg-[#3d6199]"
+            >
+              新規登録
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex-1 overflow-auto bg-white rounded-xl border shadow-sm">
@@ -275,22 +280,26 @@ export default function VehiclesTab({ onError }: Props) {
                           QR
                         </button>
                       ) : null}
-                      <button
-                        onClick={() => openEdit(v)}
-                        className="p-2 text-slate-600 hover:bg-slate-200 rounded-lg"
-                        title="編集"
-                        type="button"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => void handleDelete(v)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                        title="削除"
-                        type="button"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {canEdit && (
+                        <>
+                          <button
+                            onClick={() => openEdit(v)}
+                            className="p-2 text-slate-600 hover:bg-slate-200 rounded-lg"
+                            title="編集"
+                            type="button"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => void handleDelete(v)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                            title="削除"
+                            type="button"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

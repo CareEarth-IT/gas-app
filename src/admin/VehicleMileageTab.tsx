@@ -27,6 +27,7 @@ import type { Vehicle } from "../types/vehicle";
 
 type Props = {
   onError: (msg: string | null) => void;
+  canEdit?: boolean;
 };
 
 type EditingCell = {
@@ -96,6 +97,7 @@ type MaintenanceDateCellProps = {
   onChangeDate: (dateValue: string) => void;
   onSave: () => void;
   onCancel: () => void;
+  canEdit?: boolean;
 };
 
 function MaintenanceDateCell({
@@ -109,7 +111,8 @@ function MaintenanceDateCell({
   onStartEdit,
   onChangeDate,
   onSave,
-  onCancel
+  onCancel,
+  canEdit = true
 }: MaintenanceDateCellProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const isEditing =
@@ -124,6 +127,7 @@ function MaintenanceDateCell({
   }, [isEditing]);
 
   const startEdit = () => {
+    if (!canEdit) return;
     const existing = items[0];
     onStartEdit({
       vehicleNumber: vehicle.vehicleNumber,
@@ -203,7 +207,7 @@ function MaintenanceDateCell({
   );
 }
 
-export default function VehicleMileageTab({ onError }: Props) {
+export default function VehicleMileageTab({ onError, canEdit = true }: Props) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [logs, setLogs] = useState<DrivingLogMileage[]>([]);
   const [maintenanceRecords, setMaintenanceRecords] = useState<
@@ -487,6 +491,7 @@ export default function VehicleMileageTab({ onError }: Props) {
                                 }
                                 onSave={handleSaveCell}
                                 onCancel={() => setEditingCell(null)}
+                                canEdit={canEdit}
                               />
                             </td>
                           );

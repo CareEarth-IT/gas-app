@@ -9,6 +9,7 @@ import {
   getMaxStartBookingDate,
   hasUserReservationOverlap,
   isVehicleBooked,
+  parseDatetimeLocalValue,
   toDatetimeLocalValue,
   type ActiveReservation
 } from "../lib/reservationBooking";
@@ -127,17 +128,19 @@ export default function ReservePage({
   const bookingMin = toDatetimeLocalValue(new Date());
   const bookingStartMax = toDatetimeLocalValue(getMaxStartBookingDate());
   const bookingEndMax = reserveStart
-    ? toDatetimeLocalValue(getMaxEndForStart(new Date(reserveStart)))
+    ? toDatetimeLocalValue(getMaxEndForStart(parseDatetimeLocalValue(reserveStart)))
     : bookingStartMax;
 
-  const getReservationStart = (): Date => new Date(reserveStart);
+  const getReservationStart = (): Date => parseDatetimeLocalValue(reserveStart);
 
   const getReservationEnd = (): Date => {
     const start = getReservationStart();
     if (allDayUse) {
-      return reserveEnd ? new Date(reserveEnd) : getAllDayReservationEnd(start);
+      return reserveEnd
+        ? parseDatetimeLocalValue(reserveEnd)
+        : getAllDayReservationEnd(start);
     }
-    return new Date(reserveEnd);
+    return parseDatetimeLocalValue(reserveEnd);
   };
 
   const hasValidPeriod =
@@ -364,7 +367,7 @@ export default function ReservePage({
     }
 
     const substituteUntilDate = substituteUntil
-      ? new Date(substituteUntil)
+      ? parseDatetimeLocalValue(substituteUntil)
       : null;
     if (
       isSubstituteUse &&

@@ -35,7 +35,7 @@ export function isReservationEffective(
   if (reservation.status === "completed") return false;
   if (reservation.status && reservation.status !== "active") return false;
   const end = toDate(reservation.endTime);
-  return !!end && end >= at;
+  return !!end && end > at;
 }
 
 export function isReservationInProgress(
@@ -44,7 +44,7 @@ export function isReservationInProgress(
 ): boolean {
   const start = toDate(reservation.startTime);
   const end = toDate(reservation.endTime);
-  return !!start && !!end && start <= at && end >= at;
+  return !!start && !!end && start <= at && at < end;
 }
 
 function startOfCalendarDay(date: Date): Date {
