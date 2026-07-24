@@ -130,8 +130,43 @@ export default function ReservePage({
   const bookingEndMax = reserveStart
     ? toDatetimeLocalValue(getMaxEndForStart(parseDatetimeLocalValue(reserveStart)))
     : bookingStartMax;
+  /** 終了は開始より後のみ（datetime-local の min は開始+1分） */
+  const bookingEndMin = reserveStart
+    ? toDatetimeLocalValue(
+        new Date(parseDatetimeLocalValue(reserveStart).getTime() + 60_000)
+      )
+    : bookingMin;
 
   const getReservationStart = (): Date => parseDatetimeLocalValue(reserveStart);
+
+  const handleReserveStartChange = (value: string) => {
+    setReserveStart(value);
+    if (
+      value &&
+      reserveEnd &&
+      parseDatetimeLocalValue(reserveEnd) <= parseDatetimeLocalValue(value)
+    ) {
+      setReserveEnd("");
+    }
+    if (
+      value &&
+      substituteUntil &&
+      parseDatetimeLocalValue(substituteUntil) <= parseDatetimeLocalValue(value)
+    ) {
+      setSubstituteUntil("");
+    }
+  };
+
+  const handleReserveEndChange = (value: string) => {
+    if (
+      value &&
+      reserveStart &&
+      parseDatetimeLocalValue(value) <= parseDatetimeLocalValue(reserveStart)
+    ) {
+      return;
+    }
+    setReserveEnd(value);
+  };
 
   const getReservationEnd = (): Date => {
     const start = getReservationStart();
@@ -601,7 +636,7 @@ export default function ReservePage({
             value={reserveStart}
             min={bookingMin}
             max={bookingStartMax}
-            onChange={(e) => setReserveStart(e.target.value)}
+            onChange={(e) => handleReserveStartChange(e.target.value)}
             className="w-full h-12 px-4 mt-1 border-2 border-border-muted rounded-lg"
           />
           <p className="text-xs text-text-muted mt-1">
@@ -650,9 +685,21 @@ export default function ReservePage({
               <input
                 type="datetime-local"
                 value={substituteUntil}
-                min={reserveStart || toDatetimeLocalValue(new Date())}
-                onChange={(e) => setSubstituteUntil(e.target.value)}
-                className="w-full h-11 px-3 mt-1 border-2 border-purple-200 bg-white rounded-lg"
+                min={bookingEndMin}
+                disabled={!reserveStart}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (
+                    value &&
+                    reserveStart &&
+                    parseDatetimeLocalValue(value) <=
+                      parseDatetimeLocalValue(reserveStart)
+                  ) {
+                    return;
+                  }
+                  setSubstituteUntil(value);
+                }}
+                className="w-full h-11 px-3 mt-1 border-2 border-purple-200 bg-white rounded-lg disabled:opacity-50"
               />
               <p className="text-xs text-purple-700 mt-1">
                 故障・修理などで代車を使用する期間が未定の場合は、空欄でも登録できます。
@@ -666,14 +713,23 @@ export default function ReservePage({
           <input
             type="datetime-local"
             value={reserveEnd}
-            min={reserveStart || bookingMin}
+            min={bookingEndMin}
             max={bookingEndMax}
-            onChange={(e) => setReserveEnd(e.target.value)}
-            className="w-full h-12 px-4 mt-1 border-2 border-border-muted rounded-lg"
+            disabled={!reserveStart}
+            onChange={(e) => handleReserveEndChange(e.target.value)}
+            className="w-full h-12 px-4 mt-1 border-2 border-border-muted rounded-lg disabled:opacity-50 disabled:bg-slate-50"
           />
-          {allDayUse && (
+          {!reserveStart ? (
+            <p className="text-xs text-text-muted mt-1">
+              先に利用開始を選択してください。終了は開始より後のみ選べます。
+            </p>
+          ) : allDayUse ? (
             <p className="text-xs text-text-muted mt-1">
               終日利用でも終了日時を指定できます。未入力の場合は開始日の23:59までです。
+            </p>
+          ) : (
+            <p className="text-xs text-text-muted mt-1">
+              終了は開始日時より後のみ選択できます。
             </p>
           )}
         </div>

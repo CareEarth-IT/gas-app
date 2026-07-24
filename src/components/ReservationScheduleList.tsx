@@ -95,10 +95,10 @@ function ReservationCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-bold text-sm text-slate-800 truncate">
-            {displayCell(row.vehicleNumber)}
+            {displayCell(row.vehicleModel || row.vehicleNumber)}
           </p>
-          {row.vehicleModel && (
-            <p className="text-xs text-text-muted truncate">{row.vehicleModel}</p>
+          {row.vehicleModel && row.vehicleNumber && (
+            <p className="text-xs text-text-muted truncate">{row.vehicleNumber}</p>
           )}
         </div>
         <span

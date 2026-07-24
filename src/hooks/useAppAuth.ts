@@ -154,7 +154,23 @@ async function resolvePostAuthScreen(
     return;
   }
 
-  setScreen(getRestoredFlowScreen() ?? screenFromPath(window.location.pathname) ?? Screen.MAIN_MENU);
+  // /login や /signup にいるときはログイン画面に戻さずメニューへ
+  const isAuthScreen = (screen: Screen | null | undefined): boolean =>
+    screen === Screen.SIGN_IN || screen === Screen.SIGN_UP;
+
+  const restored = getRestoredFlowScreen();
+  if (restored != null && !isAuthScreen(restored)) {
+    setScreen(restored);
+    return;
+  }
+
+  const fromPath = screenFromPath(window.location.pathname);
+  if (fromPath != null && !isAuthScreen(fromPath)) {
+    setScreen(fromPath);
+    return;
+  }
+
+  setScreen(Screen.MAIN_MENU);
 }
 
 async function handleAuthenticatedUser(
