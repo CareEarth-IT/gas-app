@@ -72,6 +72,13 @@ export function canStartDrivingSession(
   isCurrentlyDriving: boolean,
   options?: { vehicleNumber?: string; now?: Date }
 ): boolean {
+  // TEMP: 時間・回数制限を一時停止（誰でも運転開始可）
+  void activeReservation;
+  void logs;
+  void isCurrentlyDriving;
+  void options;
+  return true;
+  /*
   if (isCurrentlyDriving) return true;
   if (!activeReservation?.allDay) return true;
   if (isLongTermReservation(activeReservation)) return true;
@@ -95,12 +102,18 @@ export function canStartDrivingSession(
   });
 
   return !hasStartedTodayForVehicle;
+  */
 }
 
 export function drivingStartBlockReason(
   reservation: ReservationLike | undefined,
   at: Date = new Date()
 ): string | null {
+  // TEMP: 予約の有無・時間帯チェックを一時停止（誰でも運転開始可）
+  void reservation;
+  void at;
+  return null;
+  /*
   if (!reservation) {
     return "有効な予約がありません。予約時間を確認するか、管理者に連絡してください。";
   }
@@ -117,4 +130,5 @@ export function drivingStartBlockReason(
     return "現在は予約時間外です。予約時間内に再度お試しください。";
   }
   return null;
+  */
 }

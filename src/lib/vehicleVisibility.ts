@@ -1,18 +1,28 @@
 import type { Vehicle } from "../types/vehicle";
 
-/** 予約画面に表示する車両（個人保有は所有者のみ、それ以外は共有車両のみ） */
+/**
+ * 予約画面に表示する車両。
+ * 個人保有でも全員が予約・利用できる（所有者メールは表示用）。
+ */
 export function filterVehiclesForReservation(
   vehicles: Vehicle[],
-  userEmail: string | undefined
+  _userEmail?: string
 ): Vehicle[] {
-  const email = userEmail?.trim() ?? "";
-  const personalOwned = vehicles.filter(
-    (v) => v.isPersonal && v.personalOwnerEmail === email
-  );
+  return vehicles;
+}
 
-  if (personalOwned.length > 0) {
-    return personalOwned;
+/** 個人保有のとき車名の右に（メール）を付ける */
+export function formatVehicleNameWithOwner(
+  vehicleName: string,
+  options?: {
+    isPersonal?: boolean;
+    personalOwnerEmail?: string | null;
   }
-
-  return vehicles.filter((v) => !v.isPersonal);
+): string {
+  const name = vehicleName.trim();
+  const email = options?.personalOwnerEmail?.trim() ?? "";
+  if (options?.isPersonal && email) {
+    return name ? `${name} (${email})` : `(${email})`;
+  }
+  return name;
 }

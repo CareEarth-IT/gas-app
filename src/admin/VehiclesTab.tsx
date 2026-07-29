@@ -18,6 +18,7 @@ import {
   driveStartQrImageUrl
 } from "../lib/qrDriveStart";
 import type { Vehicle, VehicleFormData } from "../types/vehicle";
+import { formatVehicleNameWithOwner } from "../lib/vehicleVisibility";
 import { FUEL_TYPES, USAGE_AREAS } from "../types/vehicle";
 
 const EMPTY_FORM: VehicleFormData = {
@@ -97,10 +98,6 @@ export default function VehiclesTab({ onError, canEdit = true }: Props) {
     }
     if (!form.usageArea.trim()) {
       alert("利用エリアは必須です。");
-      return;
-    }
-    if (form.isPersonal && !form.personalOwnerEmail.trim()) {
-      alert("個人保有の場合は登録メールアドレスを入力してください。");
       return;
     }
 
@@ -232,9 +229,6 @@ export default function VehiclesTab({ onError, canEdit = true }: Props) {
                 <th className="px-4 py-3 font-bold text-slate-600 whitespace-nowrap">
                   個人保有
                 </th>
-                <th className="px-4 py-3 font-bold text-slate-600 whitespace-nowrap">
-                  登録メール
-                </th>
                 <th className="px-4 py-3 font-bold text-slate-600 whitespace-nowrap w-36">
                   操作
                 </th>
@@ -253,7 +247,10 @@ export default function VehiclesTab({ onError, canEdit = true }: Props) {
                     {v.chassisNumber || "—"}
                   </td>
                   <td className="px-4 py-3 text-slate-800 font-medium">
-                    {v.vehicleName}
+                    {formatVehicleNameWithOwner(v.vehicleName, {
+                      isPersonal: v.isPersonal,
+                      personalOwnerEmail: v.personalOwnerEmail
+                    })}
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {v.modelType || "—"}
@@ -264,9 +261,6 @@ export default function VehiclesTab({ onError, canEdit = true }: Props) {
                   </td>
                   <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
                     {v.isPersonal ? "○" : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600 text-xs">
-                    {v.isPersonal ? v.personalOwnerEmail || "—" : "—"}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
@@ -452,22 +446,9 @@ export default function VehiclesTab({ onError, canEdit = true }: Props) {
                   </span>
                 </label>
                 <p className="text-xs text-slate-500 mt-1">
-                  チェックすると、登録メールのユーザー以外の予約画面には表示されません。
+                  個人保有でも全員が予約・利用できます。所有者メールは予約時に紐づき、車名の横に表示されます。
                 </p>
               </Field>
-              {form.isPersonal && (
-                <Field label="登録メールアドレス" required>
-                  <input
-                    type="email"
-                    value={form.personalOwnerEmail}
-                    onChange={(e) =>
-                      setForm({ ...form, personalOwnerEmail: e.target.value })
-                    }
-                    placeholder="例: user@example.com"
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </Field>
-              )}
             </div>
             <div className="p-6 border-t flex justify-end gap-3">
               <button

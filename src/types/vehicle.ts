@@ -6,7 +6,7 @@ export type Vehicle = {
   modelType: string;
   fuelType: string;
   usageArea: string;
-  /** 個人保有車（予約一覧では所有者以外に非表示） */
+  /** 個人保有車（所有者メールを表示。予約・利用は全員可） */
   isPersonal: boolean;
   /** 個人保有の利用者メールアドレス */
   personalOwnerEmail: string;

@@ -23,7 +23,7 @@ import {
   formatReservationEndTime
 } from "../lib/reservations";
 import { fetchVehicles, claimVehicleAsPersonal } from "../lib/vehicles";
-import { filterVehiclesForReservation } from "../lib/vehicleVisibility";
+import { filterVehiclesForReservation, formatVehicleNameWithOwner } from "../lib/vehicleVisibility";
 import {
   buildVehicleUsageList,
   groupByUsageArea
@@ -321,12 +321,12 @@ export default function ReservePage({
     })),
     activeReservations
   ).map((entry) => {
+    const vehicle = vehicles.find((v) => v.vehicleNumber === entry.vehicleNumber);
     const reservation = activeReservations.find(
       (r) => r.vehicleNumber === entry.vehicleNumber
     );
     const isSubstitute =
-      vehicles.find((v) => v.vehicleNumber === entry.vehicleNumber)
-        ?.isSubstitute === true ||
+      vehicle?.isSubstitute === true ||
       reservation?.usageStatus === "substitute" ||
       isSubstituteVehicleName(entry.vehicleName) ||
       (reservation &&
@@ -334,6 +334,8 @@ export default function ReservePage({
         isLongTermReservation(reservation));
     return {
       ...entry,
+      isPersonal: vehicle?.isPersonal === true,
+      personalOwnerEmail: vehicle?.personalOwnerEmail ?? "",
       usageStatus: isSubstitute ? "substitute" : undefined
     };
   });
@@ -429,15 +431,6 @@ export default function ReservePage({
 
     if (bookingError) {
       alert(bookingError);
-      return;
-    }
-
-    if (
-      isPersonalUse &&
-      selectedVehicle?.isPersonal &&
-      selectedVehicle.personalOwnerEmail !== userProfile.email
-    ) {
-      alert("この車両は他のユーザーの個人保有車です。");
       return;
     }
 
@@ -551,7 +544,13 @@ export default function ReservePage({
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-sm font-bold truncate">
-                              {entry.vehicleName || entry.vehicleNumber}
+                              {formatVehicleNameWithOwner(
+                                entry.vehicleName || entry.vehicleNumber,
+                                {
+                                  isPersonal: entry.isPersonal,
+                                  personalOwnerEmail: entry.personalOwnerEmail
+                                }
+                              )}
                             </p>
                             {entry.vehicleName && (
                               <p className="text-xs text-text-muted mt-0.5">
@@ -674,7 +673,7 @@ export default function ReservePage({
           </label>
           {isPersonalUse && (
             <p className="text-xs text-text-muted mt-2">
-              個人保有にすると、所有者以外の予約画面には表示されません。
+              個人保有として所有者メールを登録します。予約・利用は他の人も可能です。
             </p>
           )}
           {isSubstituteUse && (

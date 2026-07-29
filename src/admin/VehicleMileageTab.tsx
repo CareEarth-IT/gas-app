@@ -24,6 +24,7 @@ import {
 } from "../lib/vehicleMaintenance";
 import { fetchVehicles } from "../lib/vehicles";
 import type { Vehicle } from "../types/vehicle";
+import { formatVehicleNameWithOwner } from "../lib/vehicleVisibility";
 
 type Props = {
   onError: (msg: string | null) => void;
@@ -380,7 +381,10 @@ export default function VehicleMileageTab({ onError, canEdit = true }: Props) {
               >
                 <div className="px-4 py-3 border-b bg-slate-50">
                   <h3 className="font-bold text-slate-800">
-                    {vehicle.vehicleName}
+                    {formatVehicleNameWithOwner(vehicle.vehicleName, {
+                      isPersonal: vehicle.isPersonal,
+                      personalOwnerEmail: vehicle.personalOwnerEmail
+                    })}
                   </h3>
                   <p className="text-xs text-slate-500">{vehicle.vehicleNumber}</p>
                   {odometer != null && (

@@ -9,8 +9,7 @@ import {
   startDrivingLog
 } from "../lib/drivingLogs";
 import {
-  fetchActiveReservations,
-  fetchCanStartDriving
+  fetchActiveReservations
 } from "../lib/reservations";
 import { createEtcRecord, createRefuelingRecord } from "../lib/records";
 import {
@@ -282,6 +281,8 @@ export function useAppHandlers(options: AppHandlerOptions) {
     }
 
     try {
+      // TEMP: 運転開始の時間・予約チェックを一時停止
+      /*
       const result = await fetchCanStartDriving(
         userProfile.email,
         drivingStatus === "driving",
@@ -295,6 +296,7 @@ export function useAppHandlers(options: AppHandlerOptions) {
         setScreen(Screen.MAIN_MENU);
         return;
       }
+      */
     } catch (error) {
       console.warn("運転開始可否の確認に失敗しました", error);
     }
@@ -316,29 +318,6 @@ export function useAppHandlers(options: AppHandlerOptions) {
         ) as Record<string, unknown> | undefined;
       } catch (error) {
         console.warn("予約情報の取得に失敗しました", error);
-      }
-
-      if (
-        matchedReservation?.isPersonal === true &&
-        typeof matchedReservation?.vehicleNumber === "string"
-      ) {
-        try {
-          const { fetchVehicles } = await import("../lib/vehicles");
-          const vehicles = await fetchVehicles();
-          const personalVehicle = vehicles.find(
-            (v) =>
-              v.vehicleNumber === matchedReservation?.vehicleNumber &&
-              v.isPersonal &&
-              v.personalOwnerEmail !== userProfile.email
-          );
-          if (personalVehicle?.id) {
-            alert("この車両は他のユーザーの個人保有車です。");
-            setScreen(Screen.MAIN_MENU);
-            return;
-          }
-        } catch (error) {
-          console.warn("車両情報の取得に失敗しました", error);
-        }
       }
 
       const logVehicleNumber = String(

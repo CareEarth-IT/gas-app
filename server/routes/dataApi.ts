@@ -916,6 +916,8 @@ router.get(
         now
       );
 
+      // TEMP: 運転開始の時間・予約チェックを一時停止
+      /*
       const timeReason = drivingStartBlockReason(activeReservation, now);
       if (timeReason && !currentlyDriving) {
         res.json({ allowed: false, reason: timeReason });
@@ -935,6 +937,13 @@ router.get(
           ? undefined
           : "終日利用の運転開始は本日1回のみです。翌日以降に再度お試しください。"
       });
+      */
+      void activeReservation;
+      void logs;
+      void currentlyDriving;
+      void drivingStartBlockReason;
+      void canStartDrivingSession;
+      res.json({ allowed: true });
     } catch (error) {
       console.error("reservations/can-start-driving error:", error);
       res.status(500).json({ error: "運転開始可否の確認に失敗しました" });
