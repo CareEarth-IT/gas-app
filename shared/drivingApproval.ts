@@ -34,12 +34,12 @@ export function getDrivingApprovalStatus(log: {
   return getApprovalStatus(log);
 }
 
-/** 上長承認済みとして認められる運転報告か */
+/** 正式な運転報告として認められるか（報告済みであれば承認不要） */
 export function isDrivingLogRecognized(log: {
   status?: string;
   approvalStatus?: unknown;
 }): boolean {
-  return log.status === "reported" && isApproved(log);
+  return log.status === "reported";
 }
 
 /** 上長承認済みとして認められる ETC 記録か */

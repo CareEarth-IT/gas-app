@@ -14,14 +14,17 @@ import { isAdminEmail } from "../adminConfig.ts";
 import { canViewAdminPanel, resolveAdminAccess } from "../adminAccess.ts";
 import {
   approvalFieldsForCreate,
-  approvalFieldsForStatus,
   resolveInitialApprovalStatus
 } from "../approvalPolicy.ts";
 import {
-  canStartDrivingSession,
+  floorToMinute,
+  reservationRangesConflict
+} from "../../shared/reservationOverlap.ts";
+import {
   drivingStartBlockReason,
   isReservationEffective,
   isReservationInProgress,
+  reservationHolderMismatchReason,
   SESSION_STALE_MS,
   toDate,
   type DrivingLogLike,
@@ -50,10 +53,7 @@ import {
 } from "../officerAuth.ts";
 import { requireJobSecret } from "../jobAuth.ts";
 import { runMissingReportReminderJob } from "../missingReportReminder.ts";
-import {
-  notifyOfficersOnEtcSubmitted,
-  notifyOfficersOnReportSubmitted
-} from "../reportSubmittedNotification.ts";
+import { notifyOfficersOnEtcSubmitted } from "../reportSubmittedNotification.ts";
 import { serializeDoc, serializeDocs } from "../serialize.ts";
 
 const router = Router();
@@ -245,29 +245,6 @@ function findActiveReservationForDriving(
   return reservations.find(
     (r) => r.email === email && isReservationEffective(r, at)
   );
-}
-
-/** 分単位に切り捨て（秒未満の差で境界予約が誤検知されないようにする） */
-function floorToMinute(date: Date): Date {
-  const ms = date.getTime();
-  return new Date(ms - (ms % 60_000));
-}
-
-/**
- * 時間帯の重複判定（半開区間 [start, end)）。
- * 終了ちょうどからの次予約（例: 〜12:00 の次に 12:00〜）は重複しない。
- */
-function rangesOverlap(
-  aStart: Date,
-  aEnd: Date,
-  bStart: Date,
-  bEnd: Date
-): boolean {
-  const a0 = floorToMinute(aStart).getTime();
-  const a1 = floorToMinute(aEnd).getTime();
-  const b0 = floorToMinute(bStart).getTime();
-  const b1 = floorToMinute(bEnd).getTime();
-  return a0 < b1 && a1 > b0;
 }
 
 // --- Auth bootstrap ---
@@ -766,12 +743,16 @@ router.post("/reservations", requireAuth, async (req, res) => {
     await completeExpiredReservations(db, { admin: true });
     const activeReservations = await fetchActiveReservations(db);
 
+    const incomingAllDay = body.allDay === true;
     const vehicleConflict = activeReservations.find((r) => {
       if (String(r.vehicleNumber ?? "").trim() !== vehicleNumber) return false;
       const rStart = toDate(r.startTime);
       const rEnd = toDate(r.endTime);
       if (!rStart || !rEnd) return false;
-      return rangesOverlap(startDate, endDate, rStart, rEnd);
+      return reservationRangesConflict(
+        { allDay: r.allDay === true, start: rStart, end: rEnd },
+        { allDay: incomingAllDay, start: startDate, end: endDate }
+      );
     });
     if (vehicleConflict) {
       res.status(409).json({
@@ -785,11 +766,15 @@ router.post("/reservations", requireAuth, async (req, res) => {
       const rStart = toDate(r.startTime);
       const rEnd = toDate(r.endTime);
       if (!rStart || !rEnd) return false;
-      return rangesOverlap(startDate, endDate, rStart, rEnd);
+      return reservationRangesConflict(
+        { allDay: r.allDay === true, start: rStart, end: rEnd },
+        { allDay: incomingAllDay, start: startDate, end: endDate }
+      );
     });
     if (userConflict) {
       res.status(409).json({
-        error: "この時間帯には、すでにあなたの別の予約があります。"
+        error:
+          "この時間帯には、すでにあなたの別の予約があります。時間を変更するか、先の予約が終わってからお試しください。"
       });
       return;
     }
@@ -900,13 +885,6 @@ router.get(
       const db = getAdminDb();
 
       const activeReservations = await fetchActiveReservations(db);
-      const logsSnap = await db
-        .collection("drivingLogs")
-        .where("email", "==", email)
-        .get();
-      const logs = logsSnap.docs.map(
-        (docSnap) => docSnap.data() as DrivingLogLike
-      );
 
       const now = new Date();
       const activeReservation = findActiveReservationForDriving(
@@ -916,33 +894,21 @@ router.get(
         now
       );
 
-      // TEMP: 運転開始の時間・予約チェックを一時停止
-      /*
+      const holderReason = reservationHolderMismatchReason(
+        activeReservation,
+        email
+      );
+      if (holderReason && !currentlyDriving) {
+        res.json({ allowed: false, reason: holderReason });
+        return;
+      }
+
       const timeReason = drivingStartBlockReason(activeReservation, now);
       if (timeReason && !currentlyDriving) {
         res.json({ allowed: false, reason: timeReason });
         return;
       }
 
-      const allowed = canStartDrivingSession(
-        activeReservation,
-        logs,
-        currentlyDriving,
-        { vehicleNumber, now }
-      );
-
-      res.json({
-        allowed,
-        reason: allowed
-          ? undefined
-          : "終日利用の運転開始は本日1回のみです。翌日以降に再度お試しください。"
-      });
-      */
-      void activeReservation;
-      void logs;
-      void currentlyDriving;
-      void drivingStartBlockReason;
-      void canStartDrivingSession;
       res.json({ allowed: true });
     } catch (error) {
       console.error("reservations/can-start-driving error:", error);
@@ -1042,6 +1008,31 @@ router.post("/driving-logs", requireAuth, async (req, res) => {
         typeof authReq.user.name === "string" ? authReq.user.name.trim() : "";
     }
 
+    const vehicleNumber = String(body.vehicleNumber ?? "").trim();
+      const activeReservations = await fetchActiveReservations(db);
+      const now = new Date();
+      const activeReservation = findActiveReservationForDriving(
+        activeReservations,
+        email,
+        vehicleNumber,
+        now
+      );
+
+      const holderReason = reservationHolderMismatchReason(
+      activeReservation,
+      email
+    );
+    if (holderReason) {
+      res.status(403).json({ error: holderReason });
+      return;
+    }
+
+    const timeReason = drivingStartBlockReason(activeReservation, now);
+    if (timeReason) {
+      res.status(403).json({ error: timeReason });
+      return;
+    }
+
     const payload: Record<string, unknown> = {
       ...body,
       email,
@@ -1096,96 +1087,24 @@ router.patch("/driving-logs/:id/report", requireAuth, async (req, res) => {
       return;
     }
 
-    const reportTime = FieldValue.serverTimestamp();
-    const initialApproval = await resolveInitialApprovalStatus(
-      getAdminDb(),
-      userEmail(authReq),
-      "driving"
-    );
     const updateBody = {
       ...req.body,
       status: "reported",
       endTime: data.endTime ?? FieldValue.serverTimestamp(),
-      reportTime,
-      ...approvalFieldsForStatus(initialApproval)
+      reportTime: FieldValue.serverTimestamp()
     };
 
-    await ref.update(updateBody);
+    await ref.update({
+      ...updateBody,
+      approvalStatus: FieldValue.delete(),
+      approvedBy: FieldValue.delete(),
+      approvedAt: FieldValue.delete()
+    });
 
-    const logForNotify = {
-      ...data,
-      ...req.body,
-      status: "reported",
-      endTime: data.endTime ?? new Date(),
-      reportTime: new Date(),
-      approvalStatus: initialApproval
-    };
-    if (initialApproval === "pending") {
-      void notifyOfficersOnReportSubmitted(
-        getAdminDb(),
-        req.params.id,
-        logForNotify
-      )
-        .then((result) =>
-          console.log("report notification", { id: req.params.id, ...result })
-        )
-        .catch((err) =>
-          console.error("report notification failed", {
-            id: req.params.id,
-            err
-          })
-        );
-    }
-
-    res.json({ ok: true, approvalStatus: initialApproval });
+    res.json({ ok: true });
   } catch (error) {
     console.error("driving-logs/report error:", error);
     res.status(500).json({ error: "運転報告の送信に失敗しました" });
-  }
-});
-
-router.patch("/driving-logs/:id/approval", requireAuth, async (req, res) => {
-  try {
-    const authReq = req as AuthenticatedRequest;
-    const action = req.body?.action;
-    if (action !== "approve" && action !== "reject") {
-      res.status(400).json({ error: "action は approve または reject を指定してください" });
-      return;
-    }
-
-    const ref = getAdminDb().collection("drivingLogs").doc(req.params.id);
-    const snap = await ref.get();
-    if (!snap.exists) {
-      res.status(404).json({ error: "運転記録が見つかりません" });
-      return;
-    }
-
-    const data = snap.data() as { email?: string; status?: string };
-    if (data.status !== "reported") {
-      res.status(400).json({ error: "報告済みの記録のみ承認できます" });
-      return;
-    }
-
-    const allowed = await canApproveStaffRecord(
-      getAdminDb(),
-      userEmail(authReq),
-      data.email
-    );
-    if (!allowed) {
-      res.status(403).json({ error: "この運転報告を承認する権限がありません" });
-      return;
-    }
-
-    await ref.update({
-      approvalStatus: action === "approve" ? "approved" : "rejected",
-      approvedAt: FieldValue.serverTimestamp(),
-      approvedBy: userEmail(authReq)
-    });
-
-    res.json({ ok: true, approvalStatus: action === "approve" ? "approved" : "rejected" });
-  } catch (error) {
-    console.error("driving-logs/approval error:", error);
-    res.status(500).json({ error: "承認処理に失敗しました" });
   }
 });
 
@@ -1254,8 +1173,7 @@ router.post("/etc-records", requireAuth, async (req, res) => {
     const email = userEmail(authReq);
     const initialApproval = await resolveInitialApprovalStatus(
       getAdminDb(),
-      email,
-      "etc"
+      email
     );
     const ref = await getAdminDb().collection("etcRecords").add({
       ...body,
@@ -1598,7 +1516,6 @@ router.put(
         employmentType?: string;
         departmentId?: string;
         departmentIds?: string[];
-        skipDrivingApproval?: boolean;
         skipEtcApproval?: boolean;
       };
       if (!email) {
@@ -1626,7 +1543,6 @@ router.put(
             employmentType: body.employmentType,
             departmentId: departmentIds[0] ?? null,
             departmentIds: departmentIds.length > 0 ? departmentIds : null,
-            skipDrivingApproval: body.skipDrivingApproval === true,
             skipEtcApproval: body.skipEtcApproval === true,
             updatedAt: FieldValue.serverTimestamp()
           },

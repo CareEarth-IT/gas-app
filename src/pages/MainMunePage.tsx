@@ -34,18 +34,21 @@ export default function MainMenuPage({
   const menuContext = { setScreen, setEtcStep, startCamera };
   const showDrivingFeatures =
     hasReservation || drivingStatus !== "idle";
-  const showReserveNavigation =
-    drivingStatus === "idle" && !showDrivingFeatures;
+  const showReserveSchedule = drivingStatus === "idle";
 
   return (
     <div
       className={`p-6 bg-bg-app flex-1 overflow-y-auto ${
-        showReserveNavigation ? "flex items-center justify-center" : ""
+        showReserveSchedule && !showDrivingFeatures
+          ? "flex items-center justify-center"
+          : ""
       }`}
     >
       <div
         className={`w-full ${
-          showReserveNavigation ? "max-w-sm space-y-3" : "space-y-3"
+          showReserveSchedule && !showDrivingFeatures
+            ? "max-w-sm space-y-3"
+            : "space-y-3"
         }`}
       >
         {drivingStatus === "idle" && userProfile && (
@@ -94,21 +97,21 @@ export default function MainMenuPage({
           </>
         )}
 
-        {showReserveNavigation && (
+        {showReserveSchedule && (
           <>
-            <p className="text-sm text-text-muted text-center mb-1">
-              予約がない場合は、こちらから社用車を予約できます。
-            </p>
-            <MenuButton
-              icon={MAIN_MENU_ITEMS.reserve.icon}
-              title={MAIN_MENU_ITEMS.reserve.title}
-              description={MAIN_MENU_ITEMS.reserve.description}
-              onClick={() => MAIN_MENU_ITEMS.reserve.onClick(menuContext)}
-            />
+            {!showDrivingFeatures && (
+              <p className="text-sm text-text-muted text-center mb-1">
+                社用車予約一覧から空き車両を選んで予約できます。
+              </p>
+            )}
             <MenuButton
               icon={MAIN_MENU_ITEMS.reserveSchedule.icon}
               title={MAIN_MENU_ITEMS.reserveSchedule.title}
-              description={MAIN_MENU_ITEMS.reserveSchedule.description}
+              description={
+                showDrivingFeatures
+                  ? "別の空き車両も予約できます"
+                  : MAIN_MENU_ITEMS.reserveSchedule.description
+              }
               onClick={() =>
                 MAIN_MENU_ITEMS.reserveSchedule.onClick(menuContext)
               }

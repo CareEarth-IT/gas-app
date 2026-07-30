@@ -13,7 +13,6 @@ export type AdminAccessRole = "admin" | "officer" | "viewer" | "none";
 
 export type AdminAccess = {
   role: AdminAccessRole;
-  canApproveDrivingLogs: boolean;
   canViewAllTabs: boolean;
   canEditMaster: boolean;
 };
@@ -42,7 +41,6 @@ export async function resolveAdminAccess(
   if (!key) {
     return {
       role: "none",
-      canApproveDrivingLogs: false,
       canViewAllTabs: false,
       canEditMaster: false
     };
@@ -51,7 +49,6 @@ export async function resolveAdminAccess(
   if (isAdminEmail(key)) {
     return {
       role: "admin",
-      canApproveDrivingLogs: true,
       canViewAllTabs: true,
       canEditMaster: true
     };
@@ -60,7 +57,6 @@ export async function resolveAdminAccess(
   if (await isOfficerEmail(db, key)) {
     return {
       role: "officer",
-      canApproveDrivingLogs: true,
       canViewAllTabs: true,
       canEditMaster: false
     };
@@ -69,7 +65,6 @@ export async function resolveAdminAccess(
   if (await isStaffInFullViewDepartment(db, key)) {
     return {
       role: "viewer",
-      canApproveDrivingLogs: false,
       canViewAllTabs: true,
       canEditMaster: false
     };
@@ -77,7 +72,6 @@ export async function resolveAdminAccess(
 
   return {
     role: "none",
-    canApproveDrivingLogs: false,
     canViewAllTabs: false,
     canEditMaster: false
   };

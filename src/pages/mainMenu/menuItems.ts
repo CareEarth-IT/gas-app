@@ -1,6 +1,5 @@
 import {
   Calendar,
-  Car,
   Droplet,
   Gauge,
   List
@@ -15,18 +14,10 @@ type MenuItemContext = {
 };
 
 export const MAIN_MENU_ITEMS = {
-  reserve: {
-    icon: Car,
-    title: "社用車の利用状況・予約",
-    description: "空き状況を確認して社用車を予約します",
-    onClick: ({ setScreen }: MenuItemContext) => {
-      setScreen(Screen.RESERVE);
-    }
-  },
   reserveSchedule: {
     icon: Calendar,
     title: "社用車予約一覧",
-    description: "全社の社用車予約スケジュールを確認します",
+    description: "空き車両を選んで予約、予約状況を確認します",
     onClick: ({ setScreen }: MenuItemContext) => {
       setScreen(Screen.RESERVE_SCHEDULE);
     }

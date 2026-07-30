@@ -7,20 +7,6 @@ import { getApproverEmailsForStaff } from "./departmentScope.ts";
 import { toDate } from "./drivingLogic.ts";
 import { sendMail } from "./mail/index.ts";
 
-type DrivingLogReport = {
-  email?: string;
-  vehicleNumber?: string;
-  vehicleModel?: string;
-  destination?: string;
-  purpose?: string;
-  remarks?: string;
-  startMileageKm?: number;
-  endMileageKm?: number;
-  startTime?: unknown;
-  endTime?: unknown;
-  reportTime?: unknown;
-};
-
 type StaffProfileDoc = {
   name?: string;
   employmentType?: "employee" | "part_time";
@@ -63,7 +49,7 @@ async function resolveNotificationRecipients(
   db: Firestore,
   staffEmail: string,
   context?: {
-    kind: "driving" | "etc";
+    kind: "etc";
     recordId: string;
     email: string;
     staffProfileExists?: boolean;
@@ -101,116 +87,6 @@ async function resolveNotificationRecipients(
     usedAdminFallback: true,
     usedAllDepartmentsFallback: false
   };
-}
-
-function buildReportEmailText(options: {
-  staffLabel: string;
-  staffEmail: string;
-  departmentName?: string;
-  log: DrivingLogReport;
-  drivingLogId: string;
-  usedAdminFallback?: boolean;
-}): string {
-  const {
-    staffLabel,
-    staffEmail,
-    departmentName,
-    log,
-    drivingLogId,
-    usedAdminFallback
-  } = options;
-  const distanceKm =
-    log.startMileageKm != null &&
-    log.endMileageKm != null &&
-    Number.isFinite(log.startMileageKm) &&
-    Number.isFinite(log.endMileageKm)
-      ? log.endMileageKm - log.startMileageKm
-      : null;
-
-  const adminUrl =
-    process.env.APP_URL?.replace(/\/$/, "") ?? "https://drive.careearth.net";
-
-  const lines = [
-    "所属部署の役員各位",
-    "",
-    "以下のスタッフから運転報告が提出されました。",
-    "",
-    `スタッフ: ${staffLabel}（${staffEmail}）`,
-    departmentName ? `所属: ${departmentName}` : null,
-    `車両: ${[log.vehicleNumber, log.vehicleModel].filter(Boolean).join(" ") || "不明"}`,
-    `目的地: ${log.destination?.trim() || "未入力"}`,
-    `利用目的: ${log.purpose?.trim() || "未入力"}`,
-    log.remarks?.trim() ? `備考: ${log.remarks.trim()}` : null,
-    log.startMileageKm != null ? `出発時走行距離: ${log.startMileageKm} km` : null,
-    log.endMileageKm != null ? `終了時走行距離: ${log.endMileageKm} km` : null,
-    distanceKm != null ? `走行距離: ${distanceKm} km` : null,
-    `運転開始: ${formatJstDateTime(log.startTime)}`,
-    `運転終了: ${formatJstDateTime(log.endTime)}`,
-    `報告日時: ${formatJstDateTime(log.reportTime ?? new Date())}`,
-    "",
-    `管理画面: ${adminUrl}/admin`,
-    `記録 ID: ${drivingLogId}`,
-    "",
-    "管理画面の運転記録タブから承認してください。承認されるまで正式な記録として認められません。",
-    "※本メールは運転報告の送信時に自動送信されています。",
-    usedAdminFallback
-      ? "※申請者の所属部署に役員メールが未設定のため、管理者宛に送信しています。"
-      : null
-  ].filter(Boolean);
-
-  return lines.join("\n");
-}
-
-/** 運転報告提出時に所属部署の役員へ通知メールを送る */
-export async function notifyOfficersOnReportSubmitted(
-  db: Firestore,
-  drivingLogId: string,
-  log: DrivingLogReport
-): Promise<{ sent: boolean; officerCount: number }> {
-  const email = log.email?.trim();
-  if (!email) {
-    console.warn("report notification skipped: missing driver email", {
-      drivingLogId
-    });
-    return { sent: false, officerCount: 0 };
-  }
-
-  const normalizedEmail = normalizeEmail(email);
-  const profile = await loadStaffProfile(db, normalizedEmail);
-  const { emails: officers, departmentName, usedAdminFallback } =
-    await resolveNotificationRecipients(db, normalizedEmail, {
-      kind: "driving",
-      recordId: drivingLogId,
-      email: normalizedEmail,
-      staffProfileExists: profile.exists
-    });
-
-  if (officers.length === 0) {
-    console.warn("report notification skipped: no recipients", {
-      drivingLogId,
-      email: normalizedEmail,
-      departmentIds: profile.departmentIds,
-      staffProfileExists: profile.exists,
-      employmentType: inferEmploymentType(normalizedEmail)
-    });
-    return { sent: false, officerCount: 0 };
-  }
-
-  const staffLabel = profile.name?.trim() || normalizedEmail;
-  const ok = await sendMail({
-    to: officers,
-    subject: "【社用車】運転報告が提出されました",
-    text: buildReportEmailText({
-      staffLabel,
-      staffEmail: normalizedEmail,
-      departmentName,
-      log,
-      drivingLogId,
-      usedAdminFallback
-    })
-  });
-
-  return { sent: ok, officerCount: officers.length };
 }
 
 type EtcRecordSubmitted = {

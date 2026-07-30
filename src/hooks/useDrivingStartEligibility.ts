@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { fetchCanStartDriving } from "../lib/reservations";
 import type { DrivingStatus, Screen, UserProfile } from "../types";
 
 type Options = {
@@ -24,11 +25,6 @@ export function useDrivingStartEligibility({
 
   const refreshDrivingStartEligibility = useCallback(
     async (currentlyDriving?: boolean) => {
-      // TEMP: 運転開始の時間・予約チェックを一時停止
-      void currentlyDriving;
-      setCanStartDriving(true);
-      setDrivingBlockReason(null);
-      /*
       if (!userProfile?.email) {
         setCanStartDriving(true);
         setDrivingBlockReason(null);
@@ -49,7 +45,6 @@ export function useDrivingStartEligibility({
         setCanStartDriving(true);
         setDrivingBlockReason(null);
       }
-      */
     },
     [userProfile, drivingStatus, vehicleNumber]
   );

@@ -2,11 +2,6 @@ import { useEffect, useState } from "react";
 
 import { ArrowLeft, Camera, CheckCircle, Loader2, RefreshCw } from "lucide-react";
 
-import {
-  APPROVAL_LABELS,
-  getApprovalStatus,
-  getDrivingApprovalStatus
-} from "../../shared/drivingApproval";
 import { ReceiptUploadCard } from "../components/ReceiptUploadCard";
 import {
   fetchMyDrivingLogs,
@@ -38,8 +33,6 @@ type DrivingLog = {
   receiptImageUrl?: string;
   remarks?: string;
   status: "driving" | "reported";
-  approvalStatus?: "pending" | "approved" | "rejected";
-  approvedBy?: string;
 };
 
 type Reservation = {
@@ -105,23 +98,13 @@ function formatMileage(value?: number): string {
 }
 
 function drivingLogCardClass(log: DrivingLog): string {
-  const approval = getDrivingApprovalStatus(log);
   if (log.status === "driving") {
     return "bg-white border-border-muted";
-  }
-  if (approval === "pending") {
-    return "bg-amber-50 border-amber-300";
-  }
-  if (approval === "rejected") {
-    return "bg-red-50 border-red-300";
-  }
-  if (approval === "approved") {
-    return "bg-emerald-50 border-emerald-300";
   }
   return "bg-white border-border-muted";
 }
 
-function ApprovalBadge({ log }: { log: DrivingLog }) {
+function StatusBadge({ log }: { log: DrivingLog }) {
   if (log.status === "driving") {
     return (
       <span className="text-xs font-bold bg-red-100 text-red-600 px-2 py-1 rounded-full">
@@ -129,25 +112,9 @@ function ApprovalBadge({ log }: { log: DrivingLog }) {
       </span>
     );
   }
-
-  const approval = getDrivingApprovalStatus(log);
-  if (approval === "pending") {
-    return (
-      <span className="text-xs font-bold bg-amber-200 text-amber-900 px-2 py-1 rounded-full">
-        {APPROVAL_LABELS.pending}
-      </span>
-    );
-  }
-  if (approval === "rejected") {
-    return (
-      <span className="text-xs font-bold bg-red-200 text-red-800 px-2 py-1 rounded-full">
-        {APPROVAL_LABELS.rejected}
-      </span>
-    );
-  }
   return (
-    <span className="text-xs font-bold bg-emerald-200 text-emerald-900 px-2 py-1 rounded-full">
-      {APPROVAL_LABELS.approved}
+    <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
+      報告済
     </span>
   );
 }
@@ -353,7 +320,7 @@ export default function DrivingLogPage({
         ...(reportRemarks.trim() ? { remarks: reportRemarks.trim() } : {})
       });
 
-      alert("報告を送信しました。上長の承認後に正式に認められます。");
+      alert("報告を送信しました。");
       onReportSubmitted();
       const shouldRebook = rebookSubstitute;
       setEditingLogId(null);
@@ -428,19 +395,8 @@ export default function DrivingLogPage({
                     {log.endTime ? formatTimestamp(log.endTime) : "運転中"}
                   </p>
                 </div>
-                <ApprovalBadge log={log} />
+                <StatusBadge log={log} />
               </div>
-
-              {getDrivingApprovalStatus(log) === "pending" && (
-                <p className="text-xs text-amber-800 mb-2">
-                  上長の承認待ちです。承認されるまで正式な運転記録として認められません。
-                </p>
-              )}
-              {getDrivingApprovalStatus(log) === "rejected" && (
-                <p className="text-xs text-red-700 mb-2">
-                  差戻されました。内容を修正して再送信してください。
-                </p>
-              )}
 
               {isFormOpenForLog(log) ? (
                 (() => {
@@ -709,10 +665,7 @@ export default function DrivingLogPage({
                     </div>
                   )}
                   <div className="text-right pt-2">
-                    {(log.status === "driving" ||
-                      getDrivingApprovalStatus(log) === "rejected" ||
-                      getDrivingApprovalStatus(log) === "approved") && (
-                      <button
+                    <button
                       onClick={() => {
                         const fields = loadReportFields(log, reservations);
                         setEditingLogId(log.id);
@@ -728,7 +681,6 @@ export default function DrivingLogPage({
                     >
                       編集
                     </button>
-                    )}
                   </div>
                 </div>
               )}

@@ -34,7 +34,7 @@ import {
   deleteAllAdminCollectionRecords,
   fetchAdminCollection
 } from "../lib/records";
-import { approveDrivingLog, fetchAccessRole, updateAlcoholCheck } from "../lib/drivingLogs";
+import { fetchAccessRole, updateAlcoholCheck } from "../lib/drivingLogs";
 import { fetchVehicles } from "../lib/vehicles";
 import {
   fetchStaffLookupMaps,
@@ -50,13 +50,13 @@ import { isAdminEmail } from "./adminConfig";
 import {
   APPROVAL_LABELS,
   approvalRowClass,
-  getApprovalStatus,
-  getDrivingApprovalStatus
+  getApprovalStatus
 } from "../../shared/drivingApproval";
 import { ReservationScheduleList } from "../components/ReservationScheduleList";
 import { buildGoogleMapsUrl, formatTimestamp, cell } from "./format";
 
-const APPROVAL_TABS = new Set<TabId>(["drivingLogs", "etcRecords"]);
+const APPROVAL_TABS = new Set<TabId>(["etcRecords"]);
+const DRIVING_ADMIN_ACTION_TABS = new Set<TabId>(["drivingLogs"]);
 
 type TabId =
   | "vehicles"
@@ -199,15 +199,15 @@ const DRIVING_LOG_STATUS_LABELS: Record<string, string> = {
 };
 
 function getRowApproval(tab: TabId, row: Row) {
-  if (tab === "drivingLogs") return getDrivingApprovalStatus(row);
-  if (tab === "etcRecords") return getApprovalStatus(row);
+  if (tab === "etcRecords") {
+    return getApprovalStatus({ approvalStatus: row.approvalStatus });
+  }
   return null;
 }
 
 function canApproveRow(tab: TabId, row: Row): boolean {
   const approval = getRowApproval(tab, row);
   if (approval !== "pending") return false;
-  if (tab === "drivingLogs") return row.status === "reported";
   return tab === "etcRecords";
 }
 
@@ -326,10 +326,7 @@ function pickColumns(rows: Row[], tab: TabId): string[] {
       "startMileageKm",
       "endMileageKm",
       "remarks",
-      "approvalStatus",
       "status",
-      "approvedBy",
-      "approvedAt",
       "startMileageImageUrl",
       "endMileageImageUrl",
       "receiptImageUrl"
@@ -528,9 +525,7 @@ export default function AdminApp() {
     setApprovingId(logId);
     setError(null);
     try {
-      if (activeTab === "drivingLogs") {
-        await approveDrivingLog(logId, action);
-      } else if (activeTab === "etcRecords") {
+      if (activeTab === "etcRecords") {
         await approveEtcRecord(logId, action);
       }
       await loadTab(activeTab);
@@ -904,7 +899,7 @@ export default function AdminApp() {
               loading={loading}
               onRefresh={() => void loadTab(activeTab)}
               showAreaFilter
-              groupByArea
+              fillHeight
             />
           ) : (
             <div className="flex-1 overflow-auto bg-white rounded-xl border shadow-sm">
@@ -924,6 +919,11 @@ export default function AdminApp() {
                         承認操作
                       </th>
                     )}
+                    {isAdmin && DRIVING_ADMIN_ACTION_TABS.has(activeTab) && (
+                      <th className="px-4 py-3 font-bold text-slate-600 whitespace-nowrap">
+                        操作
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -932,9 +932,7 @@ export default function AdminApp() {
                     const showApprove =
                       canApprove && canApproveRow(activeTab, row);
                     const rowClass = APPROVAL_TABS.has(activeTab)
-                      ? row.status === "driving"
-                        ? "border-b border-slate-100 hover:bg-slate-50"
-                        : approvalRowClass(approval)
+                      ? approvalRowClass(approval)
                       : `border-b border-slate-100 hover:bg-slate-50 ${
                           row.status === "completed" ? "opacity-60" : ""
                         }`;
@@ -1077,29 +1075,31 @@ export default function AdminApp() {
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
                           )}
-                          {isAdmin && activeTab === "drivingLogs" && (
-                            <button
-                              type="button"
-                              disabled={
-                                deletingId === row.id ||
-                                bulkDeleting ||
-                                approvingId === row.id
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleDeleteRow(row.id);
-                              }}
-                              className="p-1.5 rounded-md text-red-600 hover:bg-red-50 disabled:opacity-50"
-                              title="削除"
-                            >
-                              {deletingId === row.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
-                          )}
                           </div>
+                        </td>
+                      )}
+                      {isAdmin && DRIVING_ADMIN_ACTION_TABS.has(activeTab) && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            type="button"
+                            disabled={
+                              deletingId === row.id ||
+                              bulkDeleting ||
+                              approvingId === row.id
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDeleteRow(row.id);
+                            }}
+                            className="p-1.5 rounded-md text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            title="削除"
+                          >
+                            {deletingId === row.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
                         </td>
                       )}
                     </tr>

@@ -44,7 +44,6 @@ const EMPTY_STAFF: Omit<StaffProfileRecord, "id"> = {
   employmentType: "employee",
   departmentId: "",
   departmentIds: [],
-  skipDrivingApproval: false,
   skipEtcApproval: false
 };
 
@@ -195,7 +194,6 @@ export default function StaffTab({ onError, canEdit = true }: StaffTabProps) {
       employmentType: row.employmentType,
       departmentId: departmentIds[0] ?? "",
       departmentIds,
-      skipDrivingApproval: row.skipDrivingApproval === true,
       skipEtcApproval: row.skipEtcApproval === true
     });
     setStaffFormOpen(true);
@@ -236,7 +234,6 @@ export default function StaffTab({ onError, canEdit = true }: StaffTabProps) {
         employmentType: staffForm.employmentType,
         departmentId: departmentIds[0],
         departmentIds,
-        skipDrivingApproval: staffForm.skipDrivingApproval === true,
         skipEtcApproval: staffForm.skipEtcApproval === true
       });
       clearStaffNameMapCache();
@@ -422,7 +419,7 @@ export default function StaffTab({ onError, canEdit = true }: StaffTabProps) {
                   部署
                 </th>
                 <th className="px-4 py-3 text-left font-bold text-slate-600">
-                  承認省略
+                  ETC承認省略
                 </th>
                 <th className="px-4 py-3 w-24" />
               </tr>
@@ -446,12 +443,7 @@ export default function StaffTab({ onError, canEdit = true }: StaffTabProps) {
                       {formatDepartmentNames(staffDepartmentIds(row), departments)}
                     </td>
                     <td className="px-4 py-3 text-slate-700 text-xs">
-                      {[
-                        row.skipDrivingApproval ? "運転" : null,
-                        row.skipEtcApproval ? "ETC" : null
-                      ]
-                        .filter(Boolean)
-                        .join("・") || "—"}
+                      {row.skipEtcApproval ? "ETC" : "—"}
                     </td>
                     <td className="px-4 py-3">
                       {canEdit && (
@@ -691,22 +683,9 @@ export default function StaffTab({ onError, canEdit = true }: StaffTabProps) {
               )}
             </div>
             <p className="text-xs text-slate-500 mb-4">
-              申請者のログインID（メール）と同じアドレスでスタッフを登録し、所属部署を選んでください。同一部署名の役員や複数部署の役員のいずれか1名が承認すれば完了します。
+              申請者のログインID（メール）と同じアドレスでスタッフを登録し、所属部署を選んでください。ETC利用の承認は同一部署名の役員や複数部署の役員のいずれか1名が行います。
             </p>
             <div className="space-y-2 mb-4">
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={staffForm.skipDrivingApproval === true}
-                  onChange={(e) =>
-                    setStaffForm((f) => ({
-                      ...f,
-                      skipDrivingApproval: e.target.checked
-                    }))
-                  }
-                />
-                運転報告の上長承認を省略（自動承認）
-              </label>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"

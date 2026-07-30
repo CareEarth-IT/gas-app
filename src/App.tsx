@@ -234,7 +234,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-200 font-sans flex flex-col items-center">
-      <div className="w-full max-w-[450px] min-h-screen flex flex-col bg-white shadow-xl relative">
+      <div
+        className={`w-full min-h-screen flex flex-col bg-white shadow-xl relative ${
+          screen === Screen.RESERVE_SCHEDULE
+            ? "max-w-[450px] md:max-w-6xl"
+            : "max-w-[450px]"
+        }`}
+      >
         <header className="bg-[#4a72b2] p-3 z-10 shrink-0 shadow-md flex items-center justify-between h-[52px]">
           <div>
             {userProfile && screen !== Screen.MAIN_MENU && (
@@ -266,7 +272,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="flex-1 flex flex-col h-full"
+              className="flex-1 flex flex-col min-h-0"
             >
               <AppScreenContent
                 screen={screen}

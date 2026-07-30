@@ -35,7 +35,6 @@ export async function bootstrapStaffProfile(
     name: name?.trim() || null,
     employmentType: inferEmploymentType(key),
     departmentId: null,
-    skipDrivingApproval: false,
     skipEtcApproval: false,
     syncedFrom: "self-registration",
     syncedAt: FieldValue.serverTimestamp(),

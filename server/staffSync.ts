@@ -117,7 +117,6 @@ export async function syncStaffFromEmployeeSite(
       };
 
       if (!existing.exists) {
-        payload.skipDrivingApproval = false;
         payload.skipEtcApproval = false;
       }
 

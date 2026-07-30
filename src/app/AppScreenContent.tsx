@@ -12,6 +12,7 @@ import RefuelPage from "../pages/RefuelPage";
 import ReservePage from "../pages/ReserverPage";
 import ReservationSchedulePage from "../pages/ReservationSchedulePage";
 import SignUpPage from "../pages/SignUpPage";
+import { beginReserveForVehicle } from "../lib/reserveFlow";
 import { EtcStep, Screen, type DrivingStatus, type UserProfile } from "../types";
 
 type CameraApi = {
@@ -224,6 +225,20 @@ export function AppScreenContent(props: AppScreenContentProps) {
         <ReservationSchedulePage
           userProfile={userProfile}
           onBackToMainMenu={onBackToMainMenu}
+          onReserveVehicle={(vehicle) => {
+            setVehicleNumber(vehicle.vehicleNumber);
+            setVehicleModel(vehicle.vehicleName);
+            beginReserveForVehicle({
+              vehicleNumber: vehicle.vehicleNumber,
+              vehicleName: vehicle.vehicleName,
+              usageArea: vehicle.usageArea,
+              isPersonal: vehicle.isPersonal,
+              isSubstitute: vehicle.isSubstitute,
+              substituteUntil: vehicle.substituteUntil,
+              returnScreen: Screen.RESERVE_SCHEDULE
+            });
+            setScreen(Screen.RESERVE);
+          }}
         />
       );
 
@@ -262,7 +277,16 @@ export function AppScreenContent(props: AppScreenContentProps) {
           onReportSubmitted={() => {
             setDrivingStatus("idle");
           }}
-          onRebookSubstitute={() => setScreen(Screen.RESERVE)}
+          onRebookSubstitute={() => {
+            beginReserveForVehicle({
+              vehicleNumber,
+              vehicleName: vehicleModel,
+              usageArea: "",
+              isSubstitute: true,
+              returnScreen: Screen.DRIVING_LOG
+            });
+            setScreen(Screen.RESERVE);
+          }}
           uploadToSakura={uploadToSakura}
           videoRef={camera.videoRef}
           isCameraActive={camera.isCameraActive}

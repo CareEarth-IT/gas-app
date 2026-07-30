@@ -42,13 +42,6 @@ export async function reportDrivingLog(
   await apiPatch(`/driving-logs/${logId}/report`, data);
 }
 
-export async function approveDrivingLog(
-  logId: string,
-  action: "approve" | "reject"
-): Promise<void> {
-  await apiPatch(`/driving-logs/${logId}/approval`, { action });
-}
-
 export async function updateAlcoholCheck(
   logId: string,
   fields: AlcoholCheckFields = getFixedAlcoholCheckFields()
@@ -58,7 +51,6 @@ export async function updateAlcoholCheck(
 
 export async function fetchAccessRole(): Promise<{
   role: "admin" | "officer" | "viewer" | "none";
-  canApproveDrivingLogs: boolean;
   canViewAllTabs: boolean;
   canEditMaster: boolean;
 }> {

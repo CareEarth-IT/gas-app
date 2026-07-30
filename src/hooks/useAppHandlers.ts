@@ -1,7 +1,8 @@
 import { getAuthInstance, logout } from "../lib/firebase";
 import {
+  destinationFromReservation,
   findActiveReservation,
-  destinationFromReservation
+  reservationHolderMismatchReason
 } from "../lib/drivingLogUtils";
 import {
   endDrivingLog,
@@ -9,7 +10,8 @@ import {
   startDrivingLog
 } from "../lib/drivingLogs";
 import {
-  fetchActiveReservations
+  fetchActiveReservations,
+  fetchCanStartDriving
 } from "../lib/reservations";
 import { createEtcRecord, createRefuelingRecord } from "../lib/records";
 import {
@@ -281,8 +283,6 @@ export function useAppHandlers(options: AppHandlerOptions) {
     }
 
     try {
-      // TEMP: 運転開始の時間・予約チェックを一時停止
-      /*
       const result = await fetchCanStartDriving(
         userProfile.email,
         drivingStatus === "driving",
@@ -291,14 +291,16 @@ export function useAppHandlers(options: AppHandlerOptions) {
       if (!result.allowed) {
         alert(
           result.reason ??
-            "終日利用の予約では、運転開始は1日1回のみです。"
+            "現在は運転を開始できません。予約時間内か確認してください。"
         );
         setScreen(Screen.MAIN_MENU);
         return;
       }
-      */
     } catch (error) {
       console.warn("運転開始可否の確認に失敗しました", error);
+      alert("運転開始の可否確認に失敗しました。通信状況を確認して再度お試しください。");
+      setScreen(Screen.MAIN_MENU);
+      return;
     }
 
     setIsSubmitting(true);
@@ -318,6 +320,18 @@ export function useAppHandlers(options: AppHandlerOptions) {
         ) as Record<string, unknown> | undefined;
       } catch (error) {
         console.warn("予約情報の取得に失敗しました", error);
+      }
+
+      const holderReason = reservationHolderMismatchReason(
+        matchedReservation as Parameters<
+          typeof reservationHolderMismatchReason
+        >[0],
+        userProfile.email
+      );
+      if (holderReason) {
+        alert(holderReason);
+        setScreen(Screen.MAIN_MENU);
+        return;
       }
 
       const logVehicleNumber = String(

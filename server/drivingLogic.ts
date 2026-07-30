@@ -47,14 +47,6 @@ export function isReservationInProgress(
   return !!start && !!end && start <= at && at < end;
 }
 
-function startOfCalendarDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function isSameCalendarDay(a: Date, b: Date): boolean {
-  return startOfCalendarDay(a).getTime() === startOfCalendarDay(b).getTime();
-}
-
 /** 予約期間が1日を超える（長期・1ヶ月共有利用） */
 export function isLongTermReservation(
   reservation: ReservationLike,
@@ -67,53 +59,18 @@ export function isLongTermReservation(
 }
 
 export function canStartDrivingSession(
-  activeReservation: ReservationLike | undefined,
-  logs: DrivingLogLike[],
-  isCurrentlyDriving: boolean,
-  options?: { vehicleNumber?: string; now?: Date }
+  _activeReservation: ReservationLike | undefined,
+  _logs: DrivingLogLike[],
+  _isCurrentlyDriving: boolean,
+  _options?: { vehicleNumber?: string; now?: Date }
 ): boolean {
-  // TEMP: 時間・回数制限を一時停止（誰でも運転開始可）
-  void activeReservation;
-  void logs;
-  void isCurrentlyDriving;
-  void options;
   return true;
-  /*
-  if (isCurrentlyDriving) return true;
-  if (!activeReservation?.allDay) return true;
-  if (isLongTermReservation(activeReservation)) return true;
-
-  const now = options?.now ?? new Date();
-  const vehicleNumber =
-    activeReservation.vehicleNumber?.trim() ??
-    options?.vehicleNumber?.trim() ??
-    "";
-
-  const hasStartedTodayForVehicle = logs.some((log) => {
-    if (
-      vehicleNumber &&
-      log.vehicleNumber?.trim() &&
-      log.vehicleNumber.trim() !== vehicleNumber
-    ) {
-      return false;
-    }
-    const logStart = toDate(log.startTime);
-    return !!logStart && isSameCalendarDay(logStart, now);
-  });
-
-  return !hasStartedTodayForVehicle;
-  */
 }
 
 export function drivingStartBlockReason(
   reservation: ReservationLike | undefined,
   at: Date = new Date()
 ): string | null {
-  // TEMP: 予約の有無・時間帯チェックを一時停止（誰でも運転開始可）
-  void reservation;
-  void at;
-  return null;
-  /*
   if (!reservation) {
     return "有効な予約がありません。予約時間を確認するか、管理者に連絡してください。";
   }
@@ -130,5 +87,16 @@ export function drivingStartBlockReason(
     return "現在は予約時間外です。予約時間内に再度お試しください。";
   }
   return null;
-  */
+}
+
+/** 予約者とログイン中アカウントが一致しない場合のメッセージ */
+export function reservationHolderMismatchReason(
+  reservation: ReservationLike | undefined,
+  loggedInEmail: string | undefined
+): string | null {
+  const holder = reservation?.email?.trim();
+  const user = loggedInEmail?.trim();
+  if (!holder || !user) return null;
+  if (holder.toLowerCase() === user.toLowerCase()) return null;
+  return `この車両は ${holder} さんの予約です。予約したアカウントでログインしてください。`;
 }

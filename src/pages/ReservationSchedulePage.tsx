@@ -3,27 +3,43 @@ import { ArrowLeft } from "lucide-react";
 
 import { ReservationScheduleList } from "../components/ReservationScheduleList";
 import {
+  fetchActiveReservations,
   fetchReservationSchedule,
   type UserReservation
 } from "../lib/reservations";
+import { fetchVehicles } from "../lib/vehicles";
 import { type UserProfile } from "../types";
+import { type Vehicle } from "../types/vehicle";
 
 type Props = {
   userProfile: UserProfile | null;
   onBackToMainMenu: () => void;
+  onReserveVehicle: (vehicle: {
+    vehicleNumber: string;
+    vehicleName: string;
+    usageArea: string;
+    isSubstitute: boolean;
+    isPersonal: boolean;
+    substituteUntil: string;
+  }) => void;
 };
 
 export default function ReservationSchedulePage({
   userProfile,
-  onBackToMainMenu
+  onBackToMainMenu,
+  onReserveVehicle
 }: Props) {
-  const [reservations, setReservations] = useState<UserReservation[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [activeReservations, setActiveReservations] = useState<UserReservation[]>([]);
+  const [scheduleReservations, setScheduleReservations] = useState<UserReservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!userProfile) {
-      setReservations([]);
+      setVehicles([]);
+      setActiveReservations([]);
+      setScheduleReservations([]);
       setLoading(false);
       return;
     }
@@ -31,13 +47,21 @@ export default function ReservationSchedulePage({
     setLoading(true);
     setError(null);
     try {
-      const list = await fetchReservationSchedule();
-      setReservations(list);
+      const [vehicleList, activeList, scheduleList] = await Promise.all([
+        fetchVehicles(),
+        fetchActiveReservations(),
+        fetchReservationSchedule()
+      ]);
+      setVehicles(vehicleList);
+      setActiveReservations(activeList);
+      setScheduleReservations(scheduleList);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "予約一覧の取得に失敗しました";
+        err instanceof Error ? err.message : "車両情報の取得に失敗しました";
       setError(message);
-      setReservations([]);
+      setVehicles([]);
+      setActiveReservations([]);
+      setScheduleReservations([]);
     } finally {
       setLoading(false);
     }
@@ -48,8 +72,8 @@ export default function ReservationSchedulePage({
   }, [load]);
 
   return (
-    <div className="flex flex-col h-full bg-bg-app">
-      <div className="p-4 bg-white border-b flex items-center gap-3">
+    <div className="flex flex-1 flex-col min-h-0 bg-white">
+      <div className="shrink-0 p-4 border-b flex items-center gap-3 bg-white">
         <button
           type="button"
           onClick={onBackToMainMenu}
@@ -61,22 +85,27 @@ export default function ReservationSchedulePage({
         <h2 className="font-bold">社用車予約一覧</h2>
       </div>
 
-      <div className="p-4 flex-1 overflow-y-auto">
+      <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
         {error && (
-          <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
+          <p className="shrink-0 mx-4 mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
             {error}
           </p>
         )}
 
         <ReservationScheduleList
-          reservations={reservations}
+          variant="vehicleStatus"
+          vehicles={vehicles}
+          activeReservations={activeReservations}
+          scheduleReservations={scheduleReservations}
+          currentUserEmail={userProfile?.email}
           loading={loading}
           onRefresh={() => void load()}
-          currentUserEmail={userProfile?.email}
+          onSelectAvailableVehicle={onReserveVehicle}
+          fillHeight
         />
 
-        <p className="text-xs text-text-muted mt-4">
-          予約の新規登録は「車の利用予約」から行えます。
+        <p className="shrink-0 px-4 py-3 text-xs text-text-muted border-t border-slate-100 bg-white">
+          「空き」の車両をタップすると予約できます。「予約中」は本日〜1ヶ月先の予約一覧です。
         </p>
       </div>
     </div>

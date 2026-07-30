@@ -3,6 +3,7 @@ import {
   toDate,
   type ReservationLike
 } from "./drivingLogUtils";
+import { reservationRangesConflict } from "../../shared/reservationOverlap";
 
 export type ActiveReservation = {
   vehicleNumber: string;
@@ -11,6 +12,7 @@ export type ActiveReservation = {
   endTime: ReservationLike["endTime"];
   status?: string;
   usageStatus?: string;
+  allDay?: boolean;
   substituteUntil?: { toDate?: () => Date } | Date | string;
 };
 
@@ -72,6 +74,16 @@ export function toDatetimeLocalValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** 入力中に開始時刻が過ぎた場合、当日分は現在時刻に揃える */
+export function normalizeBookingStart(start: Date, now = new Date()): Date {
+  if (Number.isNaN(start.getTime())) return now;
+  if (start >= now) return start;
+  if (startOfDay(start).getTime() === startOfDay(now).getTime()) {
+    return now;
+  }
+  return start;
+}
+
 /** 予約不可の理由（問題なければ null） */
 export function getBookingRangeError(
   start: Date,
@@ -88,9 +100,6 @@ export function getBookingRangeError(
   if (startDay < today) {
     return "開始日時は今日以降に設定してください。";
   }
-  if (startDay.getTime() === today.getTime() && start < now) {
-    return "開始日時は現在より後に設定してください。";
-  }
   if (startDay > startOfDay(getMaxStartBookingDate(now))) {
     return "予約開始は1ヶ月先までに設定してください。";
   }
@@ -104,29 +113,6 @@ export function getBookingRangeError(
   return null;
 }
 
-/** 分単位に切り捨て（秒未満の差で境界予約が誤検知されないようにする） */
-export function floorToMinute(date: Date): Date {
-  const ms = date.getTime();
-  return new Date(ms - (ms % 60_000));
-}
-
-/**
- * 時間帯の重複判定（半開区間 [start, end)）。
- * 終了時刻ちょうどからの次の予約（例: 〜12:00 の次に 12:00〜）は重複しない。
- */
-export function rangesOverlap(
-  aStart: Date,
-  aEnd: Date,
-  bStart: Date,
-  bEnd: Date
-): boolean {
-  const a0 = floorToMinute(aStart).getTime();
-  const a1 = floorToMinute(aEnd).getTime();
-  const b0 = floorToMinute(bStart).getTime();
-  const b1 = floorToMinute(bEnd).getTime();
-  return a0 < b1 && a1 > b0;
-}
-
 function isActiveReservationStatus(reservation: ActiveReservation): boolean {
   if (reservation.status === "completed") return false;
   if (reservation.status && reservation.status !== "active") return false;
@@ -137,6 +123,7 @@ function overlapsRange(
   reservation: ActiveReservation,
   rangeStart: Date,
   rangeEnd: Date,
+  incomingAllDay: boolean,
   match: (reservation: ActiveReservation) => boolean
 ): boolean {
   if (!match(reservation) || !isActiveReservationStatus(reservation)) {
@@ -147,20 +134,25 @@ function overlapsRange(
   const end = toDate(reservation.endTime);
   if (!start || !end) return false;
 
-  return rangesOverlap(rangeStart, rangeEnd, start, end);
+  return reservationRangesConflict(
+    { allDay: reservation.allDay, start, end },
+    { allDay: incomingAllDay, start: rangeStart, end: rangeEnd }
+  );
 }
 
 export function isVehicleBooked(
   vehicleNumber: string,
   reservations: ActiveReservation[],
   rangeStart: Date,
-  rangeEnd: Date
+  rangeEnd: Date,
+  incomingAllDay = false
 ): boolean {
   return reservations.some((reservation) =>
     overlapsRange(
       reservation,
       rangeStart,
       rangeEnd,
+      incomingAllDay,
       (r) => r.vehicleNumber === vehicleNumber
     )
   );
@@ -170,13 +162,15 @@ export function hasUserReservationOverlap(
   email: string,
   reservations: ActiveReservation[],
   rangeStart: Date,
-  rangeEnd: Date
+  rangeEnd: Date,
+  incomingAllDay = false
 ): boolean {
   return reservations.some((reservation) =>
     overlapsRange(
       reservation,
       rangeStart,
       rangeEnd,
+      incomingAllDay,
       (r) => r.email === email
     )
   );

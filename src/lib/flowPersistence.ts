@@ -29,6 +29,7 @@ export type ReserveDraft = {
   reservePurpose: string;
   reserveRouteStart: string;
   reserveRouteEnd: string;
+  returnScreen?: Screen;
 };
 
 export type FlowMeta = {
@@ -110,6 +111,17 @@ function parseEtcStep(value: unknown): EtcStep {
   return EtcStep.START;
 }
 
+export function parseReserveReturnScreen(value: unknown): Screen {
+  if (
+    value === Screen.RESERVE_SCHEDULE ||
+    value === Screen.MAIN_MENU ||
+    value === Screen.DRIVING_LOG
+  ) {
+    return value;
+  }
+  return Screen.RESERVE_SCHEDULE;
+}
+
 function parseReserveDraft(value: unknown): ReserveDraft | null {
   if (!value || typeof value !== "object") return null;
   const draft = value as Partial<ReserveDraft>;
@@ -136,7 +148,8 @@ function parseReserveDraft(value: unknown): ReserveDraft | null {
     reserveRouteStart:
       typeof draft.reserveRouteStart === "string" ? draft.reserveRouteStart : "",
     reserveRouteEnd:
-      typeof draft.reserveRouteEnd === "string" ? draft.reserveRouteEnd : ""
+      typeof draft.reserveRouteEnd === "string" ? draft.reserveRouteEnd : "",
+    returnScreen: parseReserveReturnScreen(draft.returnScreen)
   };
 }
 

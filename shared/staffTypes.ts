@@ -26,8 +26,6 @@ export type StaffProfile = {
   departmentId?: string;
   /** 複数所属がある場合の部署 ID 一覧 */
   departmentIds?: string[];
-  /** true のとき運転報告は上長承認なし（自動承認） */
-  skipDrivingApproval?: boolean;
   /** true のとき ETC 利用は上長承認なし（自動承認） */
   skipEtcApproval?: boolean;
 };

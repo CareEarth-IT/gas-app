@@ -6,8 +6,10 @@ import { initAuth, logout } from "../lib/firebase";
 import { ApiError } from "../lib/api";
 import { fetchAuthBootstrap } from "../lib/drivingLogs";
 import { getRestoredFlowScreen } from "../lib/flowPersistence";
+import { beginReserveForVehicle } from "../lib/reserveFlow";
 import { clearQrQueryParamsFromUrl } from "../lib/qrDriveStart";
 import { screenFromPath } from "../lib/screenRoutes";
+import { fetchCanStartDriving } from "../lib/reservations";
 import {
   claimUserSession,
   clearLocalSessionId,
@@ -107,6 +109,12 @@ async function resolvePostAuthScreen(
     setVehicleNumber(qrParams.vehicleNumber);
     if (qrParams.vehicleModel) setVehicleModel(qrParams.vehicleModel);
     clearQrQueryParamsFromUrl();
+    beginReserveForVehicle({
+      vehicleNumber: qrParams.vehicleNumber,
+      vehicleName: qrParams.vehicleModel ?? "",
+      usageArea: "",
+      returnScreen: Screen.MAIN_MENU
+    });
     setScreen(Screen.RESERVE);
     return;
   }
@@ -128,8 +136,6 @@ async function resolvePostAuthScreen(
     }
 
     try {
-      // TEMP: 運転開始の時間・予約チェックを一時停止
-      /*
       const result = await fetchCanStartDriving(
         userEmail,
         false,
@@ -143,15 +149,11 @@ async function resolvePostAuthScreen(
         setScreen(Screen.MAIN_MENU);
         return;
       }
-      */
     } catch (error) {
       console.warn("運転開始可否の確認に失敗しました", error);
-      // TEMP: チェック停止中はエラーでも運転開始へ進む
-      /*
       alert("運転開始の可否確認に失敗しました。再度QRを読み取ってください。");
       setScreen(Screen.MAIN_MENU);
       return;
-      */
     }
 
     setDrivingStatus("idle");

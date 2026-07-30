@@ -9,32 +9,25 @@ import {
   getMaxStartBookingDate,
   hasUserReservationOverlap,
   isVehicleBooked,
+  normalizeBookingStart,
   parseDatetimeLocalValue,
   toDatetimeLocalValue,
   type ActiveReservation
 } from "../lib/reservationBooking";
-import { ActiveReservationCard } from "../components/ActiveReservationCard";
-import { StaffNameText } from "../components/StaffNameText";
-import { useStaffDisplayNames } from "../hooks/useStaffDisplayNames";
 import {
   completeExpiredReservations,
   createReservation,
-  fetchActiveReservations,
-  formatReservationEndTime
+  fetchActiveReservations
 } from "../lib/reservations";
 import { fetchVehicles, claimVehicleAsPersonal } from "../lib/vehicles";
-import { filterVehiclesForReservation, formatVehicleNameWithOwner } from "../lib/vehicleVisibility";
-import {
-  buildVehicleUsageList,
-  groupByUsageArea
-} from "../lib/vehicleUsageStatus";
+import { filterVehiclesForReservation } from "../lib/vehicleVisibility";
 import {
   clearReserveDraft,
+  parseReserveReturnScreen,
   restoreFlowMeta,
   saveFlowMeta
 } from "../lib/flowPersistence";
 import {
-  normalizeAppPath,
   pathForScreen,
   replacePathname,
   RESERVE_FORM_PATH
@@ -42,11 +35,9 @@ import {
 import { Screen, type UserProfile } from "../types";
 import {
   ROUTE_START_PARKING,
-  USAGE_AREAS,
-  isRentalVehicleName,
-  isSubstituteVehicleName
+  USAGE_AREAS
 } from "../types/vehicle";
-import { isLongTermReservation, toDate } from "../lib/drivingLogUtils";
+import { toDate } from "../lib/drivingLogUtils";
 import { RESERVE_CATEGORIES } from "./reserve/constants";
 
 type Vehicle = {
@@ -71,15 +62,6 @@ const INITIAL_FORM = {
   reserveRouteStart: "",
   reserveRouteEnd: ""
 };
-
-function vehicleStatusLabel(
-  entry: { inUse: boolean; isReserved: boolean; usageStatus?: string }
-) {
-  if (entry.usageStatus === "substitute") return "代車";
-  if (entry.inUse) return "利用中";
-  if (entry.isReserved) return "予約済み";
-  return "空き";
-}
 
 type Props = {
   userProfile: UserProfile | null;
@@ -113,16 +95,13 @@ export default function ReservePage({
   const [reserveRouteStart, setReserveRouteStart] = useState("");
   const [reserveRouteEnd, setReserveRouteEnd] = useState("");
 
-  const [step, setStep] = useState<"status" | "form">("status");
+  const [step, setStep] = useState<"status" | "form">("form");
   const [usageArea, setUsageArea] = useState<string>(USAGE_AREAS[0]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [activeReservations, setActiveReservations] = useState<ActiveReservation[]>([]);
-  const [isLoadingVehicles, setIsLoadingVehicles] = useState(true);
-  const [vehicleLoadError, setVehicleLoadError] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
-  const { nameMap } = useStaffDisplayNames(!!userProfile);
 
   const showPurposeField = reserveCategory === "その他";
   const bookingMin = toDatetimeLocalValue(new Date());
@@ -190,27 +169,37 @@ export default function ReservePage({
       vehicleNumber,
       activeReservations,
       getReservationStart(),
-      getReservationEnd()
+      getReservationEnd(),
+      allDayUse
+    );
+
+  const isUserTimeConflict =
+    hasValidPeriod &&
+    !!userProfile?.email &&
+    hasUserReservationOverlap(
+      userProfile.email,
+      activeReservations,
+      getReservationStart(),
+      getReservationEnd(),
+      allDayUse
     );
 
   useEffect(() => {
     if (draftRestored) return;
     const draft = restoreFlowMeta().reserve;
-    const pathIsForm =
-      normalizeAppPath(window.location.pathname) === RESERVE_FORM_PATH;
 
     if (!draft) {
-      if (pathIsForm) setStep("form");
+      setStep("form");
       setDraftRestored(true);
       return;
     }
 
-    setStep(pathIsForm ? "form" : draft.step);
+    setStep("form");
     setUsageArea(draft.usageArea);
     setIsPersonalUse(draft.isPersonalUse);
     setIsSubstituteUse(draft.isSubstituteUse);
     setSubstituteUntil(draft.substituteUntil);
-    setReserveStart(draft.reserveStart);
+    setReserveStart(toDatetimeLocalValue(new Date()));
     setReserveEnd(draft.reserveEnd);
     setAllDayUse(draft.allDayUse);
     setReserveCategory(draft.reserveCategory);
@@ -225,11 +214,52 @@ export default function ReservePage({
   }, [draftRestored]);
 
   useEffect(() => {
+    if (!draftRestored || !userProfile) return;
+    if (!vehicleNumber.trim()) {
+      setScreen(Screen.RESERVE_SCHEDULE);
+    }
+  }, [draftRestored, userProfile, vehicleNumber, setScreen]);
+
+  useEffect(() => {
     if (!draftRestored) return;
     replacePathname(
       step === "form" ? RESERVE_FORM_PATH : pathForScreen(Screen.RESERVE)
     );
   }, [draftRestored, step]);
+
+  useEffect(() => {
+    if (!draftRestored || step !== "form") return;
+    setReserveStart(toDatetimeLocalValue(new Date()));
+  }, [draftRestored, step]);
+
+  useEffect(() => {
+    if (!draftRestored) return;
+
+    const syncStartToNow = () => {
+      setReserveStart((current) => {
+        if (!current) return current;
+        const normalized = normalizeBookingStart(parseDatetimeLocalValue(current));
+        const next = toDatetimeLocalValue(normalized);
+        if (next === current) return current;
+
+        setReserveEnd((endValue) => {
+          if (!endValue) return endValue;
+          if (parseDatetimeLocalValue(endValue) <= normalized) return "";
+          return endValue;
+        });
+        setSubstituteUntil((untilValue) => {
+          if (!untilValue) return untilValue;
+          if (parseDatetimeLocalValue(untilValue) <= normalized) return "";
+          return untilValue;
+        });
+        return next;
+      });
+    };
+
+    syncStartToNow();
+    const timerId = window.setInterval(syncStartToNow, 30_000);
+    return () => window.clearInterval(timerId);
+  }, [draftRestored]);
 
   useEffect(() => {
     if (!draftRestored) return;
@@ -268,14 +298,9 @@ export default function ReservePage({
     reserveRouteEnd
   ]);
 
-  const loadVehicleUsage = async () => {
-    if (!userProfile) {
-      setIsLoadingVehicles(false);
-      return;
-    }
+  const loadReserveData = async () => {
+    if (!userProfile) return;
 
-    setIsLoadingVehicles(true);
-    setVehicleLoadError(null);
     try {
       await completeExpiredReservations({
         userEmail: userProfile.email
@@ -300,88 +325,21 @@ export default function ReservePage({
       );
       setActiveReservations(activeList as ActiveReservation[]);
     } catch (error) {
-      const msg =
-        error instanceof Error ? error.message : "車両リストの取得に失敗しました";
-      console.error("車両リストの取得に失敗しました", error);
-      setVehicleLoadError(msg);
-    } finally {
-      setIsLoadingVehicles(false);
+      console.error("予約用データの取得に失敗しました", error);
     }
   };
 
   useEffect(() => {
-    void loadVehicleUsage();
+    void loadReserveData();
   }, [userProfile]);
 
-  const vehicleUsageList = buildVehicleUsageList(
-    vehicles.map((v) => ({
-      vehicleNumber: v.vehicleNumber,
-      vehicleName: v.vehicleModel,
-      usageArea: v.usageArea
-    })),
-    activeReservations
-  ).map((entry) => {
-    const vehicle = vehicles.find((v) => v.vehicleNumber === entry.vehicleNumber);
-    const reservation = activeReservations.find(
-      (r) => r.vehicleNumber === entry.vehicleNumber
-    );
-    const isSubstitute =
-      vehicle?.isSubstitute === true ||
-      reservation?.usageStatus === "substitute" ||
-      isSubstituteVehicleName(entry.vehicleName) ||
-      (reservation &&
-        isRentalVehicleName(entry.vehicleName) &&
-        isLongTermReservation(reservation));
-    return {
-      ...entry,
-      isPersonal: vehicle?.isPersonal === true,
-      personalOwnerEmail: vehicle?.personalOwnerEmail ?? "",
-      usageStatus: isSubstitute ? "substitute" : undefined
-    };
-  });
-  const vehicleUsageByArea = groupByUsageArea(vehicleUsageList, USAGE_AREAS);
   const selectedVehicle = vehicles.find((v) => v.vehicleNumber === vehicleNumber);
 
-  const handleStartReserveForVehicle = (entry: {
-    vehicleNumber: string;
-    vehicleName: string;
-    usageArea: string;
-  }) => {
-    if (!userProfile) return;
-
-    const match = vehicles.find((v) => v.vehicleNumber === entry.vehicleNumber);
-    const existingReservation = activeReservations.find(
-      (reservation) =>
-        reservation.vehicleNumber === entry.vehicleNumber &&
-        reservation.usageStatus === "substitute"
-    );
-    setVehicleNumber(entry.vehicleNumber);
-    setVehicleModel(entry.vehicleName);
-    setUsageArea(entry.usageArea || usageArea);
-    setIsPersonalUse(match?.isPersonal ?? false);
-    setIsSubstituteUse(
-      match?.isSubstitute === true ||
-        !!existingReservation ||
-        isSubstituteVehicleName(entry.vehicleName)
-    );
-    const existingSubstituteUntil =
-      toDate(match?.substituteUntil) ??
-      toDate(existingReservation?.substituteUntil);
-    setSubstituteUntil(
-      existingSubstituteUntil
-        ? toDatetimeLocalValue(existingSubstituteUntil)
-        : ""
-    );
-    setStep("form");
-  };
-
   const handleBack = () => {
-    if (step === "form") {
-      setStep("status");
-      return;
-    }
+    const returnScreen =
+      restoreFlowMeta().reserve?.returnScreen ?? Screen.RESERVE_SCHEDULE;
     clearReserveDraft();
-    setScreen(Screen.MAIN_MENU);
+    setScreen(parseReserveReturnScreen(returnScreen));
   };
 
   const handleReserveSubmit = async () => {
@@ -395,8 +353,17 @@ export default function ReservePage({
       return;
     }
 
-    const startDate = getReservationStart();
-    const endDate = getReservationEnd();
+    const now = new Date();
+    const parsedStart = getReservationStart();
+    const startDate = normalizeBookingStart(parsedStart, now);
+    if (startDate.getTime() !== parsedStart.getTime()) {
+      setReserveStart(toDatetimeLocalValue(startDate));
+    }
+    const endDate = allDayUse
+      ? reserveEnd
+        ? parseDatetimeLocalValue(reserveEnd)
+        : getAllDayReservationEnd(startDate)
+      : parseDatetimeLocalValue(reserveEnd);
 
     if (allDayUse && reserveEnd && endDate <= startDate) {
       alert("終了日時は開始日時より後に設定してください。");
@@ -422,12 +389,24 @@ export default function ReservePage({
     }
     const bookingError =
       getBookingRangeError(startDate, endDate) ??
-      (hasUserReservationOverlap(userProfile.email, activeReservations, startDate, endDate)
-        ? "この時間帯には、すでにあなたの別の予約があります。"
-        : null) ??
-      (isVehicleBooked(vehicleNumber, activeReservations, startDate, endDate)
+      (isVehicleBooked(
+        vehicleNumber,
+        activeReservations,
+        startDate,
+        endDate,
+        allDayUse
+      )
         ? "選択した車両はこの時間帯にすでに予約されています。"
-        : null);
+        : userProfile?.email &&
+            hasUserReservationOverlap(
+              userProfile.email,
+              activeReservations,
+              startDate,
+              endDate,
+              allDayUse
+            )
+          ? "この時間帯には、すでにあなたの別の予約があります。時間を変更するか、先の予約が終わってからお試しください。"
+          : null);
 
     if (bookingError) {
       alert(bookingError);
@@ -482,129 +461,12 @@ export default function ReservePage({
       setReservePurpose(INITIAL_FORM.reservePurpose);
       setReserveRouteStart(INITIAL_FORM.reserveRouteStart);
       setReserveRouteEnd(INITIAL_FORM.reserveRouteEnd);
-      setStep("status");
-      void loadVehicleUsage();
     } catch (error: any) {
       alert("予約失敗: " + error.message);
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  if (step === "status") {
-    return (
-      <div className="flex flex-col h-full bg-bg-app">
-        <div className="p-4 bg-white border-b flex items-center gap-3">
-          <button onClick={handleBack} className="p-2">
-            <ArrowLeft />
-          </button>
-          <h2 className="font-bold">社用車の利用状況</h2>
-        </div>
-
-        <div className="p-6 flex-1 overflow-y-auto">
-          <ActiveReservationCard
-            userEmail={userProfile?.email}
-            enabled={!!userProfile}
-            onCancelled={() => {
-              onReservationCancelled();
-              void loadVehicleUsage();
-            }}
-            compact
-          />
-
-          <p className="text-sm text-text-muted mb-4 mt-4">
-            現在の社用車の利用状況を確認できます。予約する車両をタップしてください。
-            <span className="block text-xs mt-1">
-              ※ 開始は1ヶ月先まで、終了は開始から1ヶ月以内
-            </span>
-          </p>
-
-          {isLoadingVehicles ? (
-            <div className="flex items-center justify-center py-12 text-text-muted">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              読み込み中...
-            </div>
-          ) : vehicleLoadError ? (
-            <p className="text-sm text-red-500">{vehicleLoadError}</p>
-          ) : vehicleUsageList.length === 0 ? (
-            <p className="text-sm text-text-muted">登録されている社用車がありません。</p>
-          ) : (
-            <div className="space-y-5">
-              {vehicleUsageByArea.map(({ area, items }) => (
-                <section key={area}>
-                  <h3 className="text-xs font-bold text-text-muted mb-2">{area}</h3>
-                  <div className="space-y-2">
-                    {items.map((entry) => (
-                      <button
-                        key={entry.vehicleNumber}
-                        type="button"
-                        onClick={() => handleStartReserveForVehicle(entry)}
-                        className="w-full text-left bg-white p-3 rounded-lg border border-border-muted hover:border-accent-blue hover:bg-blue-50/40 active:scale-[0.99] transition"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold truncate">
-                              {formatVehicleNameWithOwner(
-                                entry.vehicleName || entry.vehicleNumber,
-                                {
-                                  isPersonal: entry.isPersonal,
-                                  personalOwnerEmail: entry.personalOwnerEmail
-                                }
-                              )}
-                            </p>
-                            {entry.vehicleName && (
-                              <p className="text-xs text-text-muted mt-0.5">
-                                {entry.vehicleNumber}
-                              </p>
-                            )}
-                          </div>
-                          <span
-                            className={`shrink-0 text-xs font-bold px-2 py-1 rounded-full ${
-                              entry.usageStatus === "substitute"
-                                ? "bg-purple-100 text-purple-800"
-                                : entry.inUse
-                                ? "bg-amber-100 text-amber-800"
-                                : entry.isReserved
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-emerald-100 text-emerald-800"
-                            }`}
-                          >
-                            {vehicleStatusLabel(entry)}
-                          </span>
-                        </div>
-                        <p className="text-sm mt-2">
-                          <span className="text-text-muted">利用者：</span>
-                          <span
-                            className={
-                              entry.isReserved ? "font-medium inline-block" : "text-text-muted inline-block"
-                            }
-                          >
-                            <StaffNameText
-                              email={entry.userEmail}
-                              nameMap={nameMap}
-                              showEmailWhenNamed={entry.isReserved}
-                            />
-                          </span>
-                        </p>
-                        {entry.isReserved && entry.reservationEndTime && (
-                          <p className="text-sm mt-1">
-                            <span className="text-text-muted">終了：</span>
-                            <span className="font-medium">
-                              {formatReservationEndTime(entry.reservationEndTime)}
-                            </span>
-                          </p>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col h-full bg-bg-app">
@@ -633,7 +495,6 @@ export default function ReservePage({
           <input
             type="datetime-local"
             value={reserveStart}
-            min={bookingMin}
             max={bookingStartMax}
             onChange={(e) => handleReserveStartChange(e.target.value)}
             className="w-full h-12 px-4 mt-1 border-2 border-border-muted rounded-lg"
@@ -739,6 +600,12 @@ export default function ReservePage({
           </p>
         )}
 
+        {isUserTimeConflict && !isSelectedVehicleBooked && (
+          <p className="text-xs text-red-500">
+            この時間帯には、すでにあなたの別の予約があります。時間を変更するか、先の予約が終わってからお試しください。
+          </p>
+        )}
+
         <div>
           <label className="text-sm font-bold text-text-muted">利用目的</label>
           <div className="mt-2 space-y-2 bg-white p-3 rounded-lg border border-border-muted">
@@ -825,6 +692,7 @@ export default function ReservePage({
             (!allDayUse && !reserveEnd) ||
             !vehicleNumber ||
             isSelectedVehicleBooked ||
+            isUserTimeConflict ||
             (showPurposeField && !reservePurpose.trim()) ||
             !reserveRouteStart ||
             !reserveRouteEnd

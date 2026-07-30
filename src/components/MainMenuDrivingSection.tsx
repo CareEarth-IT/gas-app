@@ -30,7 +30,7 @@ export function MainMenuDrivingSection({
       {!isDriving && !isReportingNeeded && !canStartDriving && (
         <p className="text-sm text-text-muted text-center py-2 px-2">
           {drivingBlockReason ??
-            "終日利用の運転開始は本日1回のみです。翌日以降に再度お試しください。"}
+            "現在は運転を開始できません。予約時間内か確認してください。"}
         </p>
       )}
 
