@@ -2,7 +2,8 @@ import { Router } from "express";
 import {
   FieldValue,
   Timestamp,
-  type Firestore
+  type Firestore,
+  type Query
 } from "firebase-admin/firestore";
 
 import {
@@ -134,10 +135,15 @@ async function completeExpiredReservations(
   db: Firestore,
   options?: { userEmail?: string; admin?: boolean }
 ): Promise<number> {
-  const snap = await db
+  let query: Query = db
     .collection("reservations")
-    .where("status", "==", "active")
-    .get();
+    .where("status", "==", "active");
+
+  if (options?.userEmail && !options.admin) {
+    query = query.where("email", "==", options.userEmail);
+  }
+
+  const snap = await query.get();
 
   const now = new Date();
   let completed = 0;
@@ -146,14 +152,6 @@ async function completeExpiredReservations(
     const data = docSnap.data() as ReservationLike & { email?: string };
     const end = toDate(data.endTime);
     if (!end || end > now) continue;
-
-    if (
-      options?.userEmail &&
-      !options.admin &&
-      data.email !== options.userEmail
-    ) {
-      continue;
-    }
 
     await docSnap.ref.update({ status: "completed" });
     completed++;
@@ -170,6 +168,7 @@ async function fetchUserReservations(
 
   const snap = await db
     .collection("reservations")
+    .where("email", "==", email)
     .where("status", "==", "active")
     .get();
 
@@ -178,7 +177,7 @@ async function fetchUserReservations(
       id: docSnap.id,
       ...(docSnap.data() as ReservationLike)
     }))
-    .filter((r) => r.email === email && isReservationEffective(r))
+    .filter((r) => isReservationEffective(r))
     .sort((a, b) => {
       const aStart = toDate(a.startTime)?.getTime() ?? 0;
       const bStart = toDate(b.startTime)?.getTime() ?? 0;
@@ -268,12 +267,10 @@ router.post("/auth/bootstrap", requireAuth, async (req, res) => {
       console.error("auth/bootstrap staff profile error:", error);
     }
 
-    await completeExpiredReservations(db, { userEmail: email });
     const reservations = await fetchUserReservations(db, email);
-    const activeReservations = await fetchActiveReservations(db);
     const vehicleReservation = vehicleNumber
       ? findActiveReservationForDriving(
-          activeReservations,
+          reservations,
           email,
           vehicleNumber,
           new Date()
